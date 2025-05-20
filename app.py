@@ -182,7 +182,6 @@ def create_asset_route():
                         # --- Call GPT to describe Art Style ---
                         if gpt_client and raw_image_link and not raw_image_link.startswith("Error"):
                             print(f"Sending image to GPT for style analysis: {raw_image_link}")
-                            art_style_prompt_text = f'''thoroughly describe the style of the image at {raw_image_link} in detail. Output in following json format: ... (your full JSON prompt format here) ... ''' # Truncated for brevity, ensure full prompt is here
                             # Ensure your full JSON structure is in the prompt like before
                             art_style_prompt_text = f"""thoroughly describe the style of the image at {raw_image_link} in detail. 
 Output in following json format:
@@ -208,6 +207,8 @@ Output in following json format:
     }},
     "additional notes": ""
 }}"""
+                            print(f"\n--- Sending to GPT for Art Style Analysis ---")
+                            print(f"Art Style Prompt:\n{art_style_prompt_text}\n")
                             gpt_response = gpt_client.chat.completions.create(
                                 model="gpt-4o", messages=[{"role":"user","content":[{"type":"text","text":art_style_prompt_text},{"type":"image_url","image_url":{"url":raw_image_link}}]}] , max_tokens=1000
                             )
@@ -253,7 +254,8 @@ Output in following json format:
                     "competitor games":[]
                 }}
             }} """
-            print("Requesting IP Trends from XAI/Grok...")
+            print("\n--- Requesting IP Trends from XAI/Grok ---")
+            print(f"IP Trends Prompt:\n{ip_trends_prompt_text}\n")
             try:
                 ip_trends_response = xai_client.chat.completions.create(
                     model="grok-3", # As per XAI documentation
@@ -268,7 +270,7 @@ Output in following json format:
                 ip_trends_data = {"error": f"Failed to get IP Trends from XAI/Grok: {e}"}
 
             # 2. Event Trends Research
-            event_trends_prompt_text = f"""you are the marketing research specialist working on identifying popular trends aligning with the [{data.get('ip_description', '')}], [{data.get('description', '')}] direction based on [{data.get('target_audience', '')}] interest in the context of [{data.get('event_name', '')}]. Make a concise list of key trends from entertainment media and social media trends. Output in following jason format:
+            event_trends_prompt_text = f"""you are the marketing research specialist working on identifying popular trends aligning with the [{data.get('ip_description', '')}], [{data.get('asset_description', '')}] direction based on [{data.get('target_audience', '')}] interest in the context of [{data.get('event_name', '')}]. Make a concise list of key trends from entertainment media and social media trends. Output in following jason format:
             {{
                 "Event trends":{{
                     observations:"",
@@ -277,7 +279,8 @@ Output in following json format:
                     "competitor games":[]
                 }}
             }} """
-            print("Requesting Event Trends from XAI/Grok...")
+            print("\n--- Requesting Event Trends from XAI/Grok ---")
+            print(f"Event Trends Prompt:\n{event_trends_prompt_text}\n")
             try:
                 event_trends_response = xai_client.chat.completions.create(
                     model="grok-3", # As per XAI documentation
@@ -294,30 +297,233 @@ Output in following json format:
             ip_trends_data = {"error": "XAI client not initialized. Check API key."}
             event_trends_data = {"error": "XAI client not initialized. Check API key."}
 
-        # --- Mocked data for remaining steps (will be replaced in future phases) ---
-        brainstorm_output = {
-            "concept_name": f"Mock Concept for {data.get('description', 'N/A')}",
-            "level1": {"name": "Level 1 Mock", "description": "Desc 1", "elements": ["Elem A"]},
-            "level6": {"name": "Level 6 Mock", "description": "Desc 6", "elements": ["Elem F"]}
-        }
-        feedback_output = {
-            "evaluation": {
-                f"level{i+1}": {
-                    "strengths": [f"Mock strength for level {i+1}"],
-                    "issues": [],
-                    "suggestions": [f"Mock suggestion for level {i+1}"]
-                } for i in range(6)
-            }
-        }
-        final_result_output = brainstorm_output 
-        final_result_output["concept_name"] += " (Adjusted)"
-        mock_generated_asset_image_url = "/static/mock_image.png" 
+        # --- Combine research_info for GPT Brainstorm prompt ---
+        research_info_combined = { "IP_trends_research": ip_trends_data, "Event_trends_research": event_trends_data}
+        research_info_json_string = json.dumps(research_info_combined, indent=4) 
+
+        # --- GPT Brainstorm - Step 1: Initial Concept & Visual Design ---
+        initial_concept_output = {}
+        concept_name_from_gpt = data.get('asset_description', 'Unnamed Concept') # Fallback
+        visual_design_from_gpt = "Default visual design description." # Fallback
+
+        if gpt_client:
+            prompt_step1_text = f"""Given the following asset details and research information, generate a unique concept name and a detailed visual design description for a [{data.get('asset_description', '')}] [{data.get('entity', '')}] [{data.get('asset_type', '')}] within a [{data.get('ip_description', '')}] game.
+
+Asset Description: {data.get('asset_description', '')}
+Entity: {data.get('entity', '')}
+Asset Type: {data.get('asset_type', '')}
+IP Description: {data.get('ip_description', '')}
+
+Research Information:
+{research_info_json_string}
+
+Output ONLY a single JSON object with the following structure:
+{{
+    "concept_name": "<Generated Concept Name>",
+    "visual_design": "<Detailed Visual Design Description>"
+}}"""
+            print("\n--- Requesting Initial Concept & Visual Design from GPT (Step 1) ---")
+            print(f"GPT Initial Concept Prompt:\n{prompt_step1_text}\n")
+            try:
+                response_step1 = gpt_client.chat.completions.create(
+                    model="gpt-4o",
+                    messages=[{"role": "user", "content": prompt_step1_text}],
+                    response_format={"type": "json_object"},
+                    max_tokens=500 # Adjust as needed for name + visual description
+                )
+                content_step1 = response_step1.choices[0].message.content
+                print(f"GPT Initial Concept Raw Response: {content_step1}")
+                if content_step1.strip().startswith("```json"):
+                    json_block_step1 = content_step1.strip()[7:-3].strip()
+                else:
+                    json_block_step1 = content_step1
+                initial_concept_output = json.loads(json_block_step1)
+                concept_name_from_gpt = initial_concept_output.get("concept_name", concept_name_from_gpt)
+                visual_design_from_gpt = initial_concept_output.get("visual_design", visual_design_from_gpt)
+            except Exception as e:
+                print(f"Error in GPT Brainstorm Step 1 (Initial Concept): {e}")
+                initial_concept_output = {"error": f"Failed GPT Brainstorm Step 1: {e}"}
+        else:
+            print("GPT client not initialized. Skipping GPT Brainstorm Step 1.")
+            initial_concept_output = {"error": "GPT client not initialized for Step 1."}
+
+        # --- GPT Brainstorm - Step 2: Progression Brainstorm ---
+        brainstorm_output = {} # Initialize
+        if gpt_client and "error" not in initial_concept_output:
+            prompt_step2_text = f"""Brainstorm a 6-level progression for the concept named '[{concept_name_from_gpt}]'.
+The asset is a [{data.get('asset_description', '')}] [{data.get('entity', '')}] [{data.get('asset_type', '')}] from a [{data.get('ip_description', '')}] game.
+
+Adhere to the following visual design constraints for the progression:
+{visual_design_from_gpt}
+
+Progression Rules:
+- Progression must go from level 1 to level 6.
+- Progression should show logical improvement and continuation from one level to the next.
+- Complexity of the silhouette must grow from simple (level 1) to complex (level 6).
+- Elements removed in one level must not reappear in subsequent levels.
+- The [{data.get('asset_type', '')}] should have repeating elements between neighboring levels for recognizability and a sense of belonging to one unified collection, while avoiding boring silhouette repetitiveness.
+- Avoid including parts of the environment.
+
+Output ONLY a single JSON object with the following structure (ensure 'concept_name' is '[{concept_name_from_gpt}]'):
+{{
+    "concept_name": "{concept_name_from_gpt}",
+    "level1": {{ "name": "", "description": "", "elements": [] }},
+    "level2": {{ "name": "", "description": "", "elements": [] }},
+    "level3": {{ "name": "", "description": "", "elements": [] }},
+    "level4": {{ "name": "", "description": "", "elements": [] }},
+    "level5": {{ "name": "", "description": "", "elements": [] }},
+    "level6": {{ "name": "", "description": "", "elements": [] }}
+}}"""
+            print("\n--- Requesting Progression Brainstorm from GPT (Step 2) ---")
+            print(f"GPT Progression Prompt:\n{prompt_step2_text}\n")
+            try:
+                brainstorm_response = gpt_client.chat.completions.create(
+                    model="gpt-4o", 
+                    messages=[{"role": "user", "content": prompt_step2_text}],
+                    max_tokens=2500 # Increased for 6-level detail
+                )
+                brainstorm_content = brainstorm_response.choices[0].message.content
+                print(f"GPT Progression Raw Response: {brainstorm_content}")
+                if brainstorm_content.strip().startswith("```json"):
+                    json_block_brainstorm = brainstorm_content.strip()[7:-3].strip()
+                else:
+                    json_block_brainstorm = brainstorm_content
+                brainstorm_output = json.loads(json_block_brainstorm)
+            except Exception as e:
+                print(f"Error calling GPT for Progression Brainstorm (Step 2) or parsing JSON: {e}")
+                brainstorm_output = {"error": f"Failed to get Progression Brainstorm from GPT (Step 2): {e}", "concept_name_used": concept_name_from_gpt}
+        elif "error" in initial_concept_output:
+            brainstorm_output = {"error": "Skipping Progression Brainstorm due to error in Step 1.", "step1_error": initial_concept_output.get("error")}
+        else:
+            print("GPT client not initialized. Skipping GPT Progression Brainstorm call (Step 2).")
+            brainstorm_output = {"error": "GPT client not initialized for Step 2."}
+
+        # --- GPT Feedback on Brainstorm ---
+        feedback_output = {}
+        if gpt_client and "error" not in brainstorm_output:
+            brainstorm_json_string_for_feedback = json.dumps(brainstorm_output, indent=4)
+            feedback_prompt_text = f"""evaluate the progression desribed in 
+{brainstorm_json_string_for_feedback}
+come up with actionable feedback for each of the levels if necessary
+output as a json:
+{{
+    "evaluation": {{
+        "level1": {{
+            "strengths": [],
+            "issues": [],
+            "suggestions": []
+        }},
+        "level2": {{
+            "strengths": [],
+            "issues": [],
+            "suggestions": []
+        }},
+        "level3": {{
+            "strengths": [],
+            "issues": [],
+            "suggestions": []
+        }},
+        "level4": {{
+            "strengths": [],
+            "issues": [],
+            "suggestions": []
+        }},
+        "level5": {{
+            "strengths": [],
+            "issues": [],
+            "suggestions": []
+        }},
+        "level6": {{
+            "strengths": [],
+            "issues": [],
+            "suggestions": []
+        }}
+    }}
+}}"""
+            print("\n--- Requesting Feedback on Brainstorm from GPT ---")
+            print(f"GPT Feedback Prompt:\n{feedback_prompt_text}\n")
+            try:
+                feedback_response = gpt_client.chat.completions.create(
+                    model="gpt-4o",
+                    messages=[{"role": "user", "content": feedback_prompt_text}],
+                    max_tokens=1500 # Adjust as needed
+                )
+                feedback_content = feedback_response.choices[0].message.content
+                print(f"GPT Feedback Raw Response: {feedback_content}")
+                if feedback_content.strip().startswith("```json"):
+                    json_block_feedback = feedback_content.strip()[7:-3].strip()
+                else:
+                    json_block_feedback = feedback_content
+                feedback_output = json.loads(json_block_feedback)
+            except Exception as e:
+                print(f"Error calling GPT for Feedback or parsing JSON: {e}")
+                feedback_output = {"error": f"Failed to get Feedback from GPT: {e}"}
+        elif "error" in brainstorm_output:
+            feedback_output = {"error": "Skipping Feedback due to error in Brainstorm step.", "brainstorm_error": brainstorm_output.get("error")}
+        else:
+            print("GPT client not initialized. Skipping GPT Feedback call.")
+            feedback_output = {"error": "GPT client not initialized for Feedback."}
+
+        # --- GPT Final Result (Iteration on Brainstorm based on Feedback) ---
+        final_result_output = {}
+        if gpt_client and "error" not in brainstorm_output and "error" not in feedback_output:
+            brainstorm_json_for_final = json.dumps(brainstorm_output, indent=4)
+            feedback_json_for_final = json.dumps(feedback_output, indent=4)
+            final_result_prompt_text = f"""Adjust the [brainstorm] based on the [feedback].
+
+[brainstorm]:
+{brainstorm_json_for_final}
+
+[feedback]:
+{feedback_json_for_final}
+
+Output ONLY the adjusted brainstorm as a single JSON object, maintaining the exact same structure as the original brainstorm input (concept_name, level1 to level6 with name, description, elements)."""
+            print("\n--- Requesting Final Result (Iteration) from GPT ---")
+            print(f"GPT Final Result Prompt:\n{final_result_prompt_text}\n")
+            try:
+                final_result_response = gpt_client.chat.completions.create(
+                    model="gpt-4o", 
+                    messages=[{"role": "user", "content": final_result_prompt_text}],
+                    max_tokens=2500 # Should be similar to brainstorm output size
+                )
+                final_result_content = final_result_response.choices[0].message.content
+                print(f"GPT Final Result Raw Response: {final_result_content}")
+                if final_result_content.strip().startswith("```json"):
+                    json_block_final = final_result_content.strip()[7:-3].strip()
+                else:
+                    json_block_final = final_result_content
+                final_result_output = json.loads(json_block_final)
+            except Exception as e:
+                print(f"Error calling GPT for Final Result or parsing JSON: {e}")
+                final_result_output = {"error": f"Failed to get Final Result from GPT: {e}", "original_brainstorm": brainstorm_output}
+        elif "error" in brainstorm_output:
+            final_result_output = {"error": "Skipping Final Result due to error in Brainstorm step.", "brainstorm_error": brainstorm_output.get("error")}
+        elif "error" in feedback_output:
+            final_result_output = {"error": "Skipping Final Result due to error in Feedback step.", "feedback_error": feedback_output.get("error"), "original_brainstorm": brainstorm_output}
+        else:
+            print("GPT client not initialized. Skipping GPT Final Result call.")
+            final_result_output = {"error": "GPT client not initialized for Final Result."}
+        
+        # Fallback for final_result_output if it's empty or an error, to ensure concept_name is present for UI
+        if not final_result_output or "error" in final_result_output:
+            if "error" in brainstorm_output:
+                 final_result_output = {"concept_name": concept_name_from_gpt + " (Error in brainstorm)", **brainstorm_output}
+            else:
+                 # Use the brainstorm_output as a base if feedback or final iteration failed
+                 final_result_output = brainstorm_output.copy() if isinstance(brainstorm_output, dict) else {"concept_name": concept_name_from_gpt + " (Error in feedback/final step)"}
+                 if "concept_name" in final_result_output and not final_result_output.get("error"): # check if brainstorm_output was not an error itself
+                    final_result_output["concept_name"] = final_result_output.get("concept_name", concept_name_from_gpt) + " (Feedback/Final step failed)"
+                 elif not "concept_name" in final_result_output: # if brainstorm_output was an error without concept_name
+                    final_result_output["concept_name"] = concept_name_from_gpt + " (Error in feedback/final step)"
+
+        mock_generated_asset_image_url = "/static/mock_image.png"
 
         response_data = {
-            "research_info_grok_ip": ip_trends_data, # Now uses actual XAI response or error
-            "research_info_grok_event": event_trends_data, # Now uses actual XAI response or error
+            "research_info_grok_ip": ip_trends_data,
+            "research_info_grok_event": event_trends_data,
             "art_style_gpt": art_style_info, 
-            "brainstorm_gpt": brainstorm_output,
+            "initial_concept_gpt": initial_concept_output, # Adding step 1 output for visibility
+            "brainstorm_gpt": brainstorm_output, # This is now step 2 output
             "feedback_gpt": feedback_output,
             "final_result_gpt": final_result_output,
             "uploaded_sample_image_url": sample_image_url, 

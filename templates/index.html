@@ -68,8 +68,8 @@
                 <option value="enemy">Enemy</option>
             </select>
 
-            <label for="description_input">Description:</label>
-            <input type="text" id="description_input" name="description" required>
+            <label for="asset_description_input">Asset Description:</label>
+            <input type="text" id="asset_description_input" name="asset_description" required>
 
             <label for="event_name">Event Name (e.g., Halloween, Christmas):</label>
             <input type="text" id="event_name" name="event_name">
@@ -107,19 +107,24 @@
                 <h4>GPT - Art Style Description</h4>
                 <pre id="gptArtStyleOutput"></pre>
             </div>
+
+            <div class="output-section">
+                <h4>GPT - Initial Concept & Visual Design</h4>
+                <pre id="gptInitialConceptOutput"></pre>
+            </div>
             
             <div class="output-section">
-                <h4>GPT - Brainstorm (Mocked)</h4>
+                <h4>GPT - Progression Brainstorm</h4>
                 <pre id="gptBrainstormOutput"></pre>
             </div>
 
             <div class="output-section">
-                <h4>GPT - Feedback on Brainstorm (Mocked)</h4>
+                <h4>GPT - Feedback on Brainstorm</h4>
                 <pre id="gptFeedbackOutput"></pre>
             </div>
 
             <div class="output-section">
-                <h4>GPT - Final Result (Mocked)</h4>
+                <h4>GPT - Final Result (Iterated Brainstorm)</h4>
                 <pre id="gptFinalResultOutput"></pre>
             </div>
 
@@ -168,8 +173,11 @@
             const form = document.getElementById('assetForm');
             const formData = new FormData(form);
             const resultsSection = document.getElementById('resultsSection');
+            const createButton = document.getElementById('createAssetButton');
 
             startLoadingAnimation();
+            createButton.disabled = true;
+            createButton.style.opacity = "0.7";
             resultsSection.style.display = 'none';
 
             // Basic client-side validation (can be expanded)
@@ -186,6 +194,8 @@
             if (!isValid) {
                 stopLoadingAnimation();
                 alert('Please fill in all required fields.');
+                createButton.disabled = false;
+                createButton.style.opacity = "1";
                 return;
             }
 
@@ -204,6 +214,15 @@
                 document.getElementById('grokIpTrendsOutput').textContent = JSON.stringify(results.research_info_grok_ip, null, 2);
                 document.getElementById('grokEventTrendsOutput').textContent = JSON.stringify(results.research_info_grok_event, null, 2);
                 document.getElementById('gptArtStyleOutput').textContent = JSON.stringify(results.art_style_gpt, null, 2);
+                
+                // For Initial Concept output from GPT (Step 1 of brainstorm)
+                const gptInitialConceptOutput = document.getElementById('gptInitialConceptOutput');
+                if (results.initial_concept_gpt) {
+                    gptInitialConceptOutput.textContent = JSON.stringify(results.initial_concept_gpt, null, 2);
+                } else {
+                    gptInitialConceptOutput.textContent = 'N/A';
+                }
+
                 document.getElementById('gptBrainstormOutput').textContent = JSON.stringify(results.brainstorm_gpt, null, 2);
                 document.getElementById('gptFeedbackOutput').textContent = JSON.stringify(results.feedback_gpt, null, 2);
                 document.getElementById('gptFinalResultOutput').textContent = JSON.stringify(results.final_result_gpt, null, 2);
@@ -245,6 +264,8 @@
                 alert('An error occurred while creating the asset. Check the console for details.');
             } finally {
                 stopLoadingAnimation();
+                createButton.disabled = false;
+                createButton.style.opacity = "1";
             }
         });
 
@@ -255,7 +276,7 @@
             
             document.getElementById('asset_type').value = 'character_concept';
             document.getElementById('entity').value = 'friendly_npc';
-            document.getElementById('description_input').value = 'Restaurant customer'; // Changed from theme to description
+            document.getElementById('asset_description_input').value = 'Restaurant customer';
             document.getElementById('event_name').value = 'Christmas';
 
             // For the sample image, we can't set the file input directly.

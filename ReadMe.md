@@ -20,7 +20,7 @@ user fill out the following fields
 #asset info
     1. (dropdown menu) asset_type: character concept, character portrait, game item, buiding
     2. (dropdown menu) entity: player, friendly npc, enemy
-    3. Description: manual user input for the asset description (e.g. undead, elfs, humans, coffeeshop customers).
+    3. asset_description: manual user input for the asset description (e.g. undead, elfs, humans, coffeeshop customers).
     4. event_name: manual user input like Halloween, Christmas, St.Patrick's Day
 
 
@@ -44,7 +44,7 @@ fields in this block are filled out automatically after the button has been pres
             }
         } "
     2. <this one is filled out automatically by Grok> based on the following prompt with variables in [] being filled out from the text fields completed by the user
-        "you are the marketing research specialist working on identifying popular trends aligning with the [IP_description], [Description] direction based on [target_audience] interest in the contest of [event_name]. Make a concise list of key trends from entertainment media and social media trends. Output in following jason format:
+        "you are the marketing research specialist working on identifying popular trends aligning with the [IP_description], [asset_description] direction based on [target_audience] interest in the contest of [event_name]. Make a concise list of key trends from entertainment media and social media trends. Output in following jason format:
         {
             "Event trends":{
                 observations:"",
@@ -83,7 +83,7 @@ fields in this block are filled out automatically after the button has been pres
 when info in all 3 brain storm fields has been filled out/updated the script compiles received jasons from 1 and 2 into one (simple merge of the two JSON objects), let's call it research_info
 if asset info is assembled successfully it is used in the following brainstorm sequence of prompts:
 1. brainstorm. send a requst to GPT vie following prompt:
-    "brainstorm a [Description] [entity] [asset_type] progression from a [IP_description] game.
+    "brainstorm a [asset_description] [entity] [asset_type] progression from a [IP_description] game.
     use the information from [research_info] to guid the design decisions
     progression level 1 → level 6
     progression has a continuation and a logical improvement from level to level
@@ -181,7 +181,7 @@ if asset info is assembled successfully it is used in the following brainstorm s
     top row level 1, level 2, level 3
     bottom row level 4, level 5, level 6
 
-    add a [Description] [entity] [asset_type] progression from following json structure:
+    add a [asset_description] [entity] [asset_type] progression from following json structure:
     [final_result]
     
     using the style described in the following json structure:
