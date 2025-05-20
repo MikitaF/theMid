@@ -2,6 +2,7 @@ import os
 import git # For Git operations
 import uuid # For generating unique filenames
 import json # For parsing GPT response
+# import requests # No longer strictly needed for XAI if using OpenAI library interface
 from flask import Flask, render_template, request, jsonify
 from dotenv import load_dotenv
 from werkzeug.utils import secure_filename # For secure file handling
@@ -41,12 +42,27 @@ REPO_PATH = os.getcwd()
 # This is needed to construct the raw file URL and for the push remote.
 GIT_REPO_URL = os.getenv("GIT_REPO_URL") # Read from .env
 
-# Initialize OpenAI client
+# Initialize OpenAI client for GPT
 if not GPT_API_KEY:
     print("Warning: GPT_API_KEY not found in .env. GPT calls will fail.")
     gpt_client = None
 else:
     gpt_client = OpenAI(api_key=GPT_API_KEY)
+
+# Initialize OpenAI client for XAI/Grok
+if not XAI_API_KEY:
+    print("Warning: XAI_API_KEY not found in .env. XAI/Grok calls will fail.")
+    xai_client = None
+else:
+    try:
+        xai_client = OpenAI(
+            api_key=XAI_API_KEY,
+            base_url="https://api.x.ai/v1" # As per XAI documentation
+        )
+        print("XAI client initialized successfully.")
+    except Exception as e:
+        print(f"Error initializing XAI client: {e}")
+        xai_client = None
 
 @app.route('/')
 def index():
@@ -65,6 +81,8 @@ def create_asset_route():
         sample_image_url = None
         raw_image_link = None
         art_style_info = {} # Initialize art_style_info
+        ip_trends_data = {}
+        event_trends_data = {}
 
         if 'sample_image' in request.files:
             file = request.files['sample_image']
@@ -164,7 +182,9 @@ def create_asset_route():
                         # --- Call GPT to describe Art Style ---
                         if gpt_client and raw_image_link and not raw_image_link.startswith("Error"):
                             print(f"Sending image to GPT for style analysis: {raw_image_link}")
-                            art_style_prompt = f"""thoroughly describe the style of the image at {raw_image_link} in detail. 
+                            art_style_prompt_text = f'''thoroughly describe the style of the image at {raw_image_link} in detail. Output in following json format: ... (your full JSON prompt format here) ... ''' # Truncated for brevity, ensure full prompt is here
+                            # Ensure your full JSON structure is in the prompt like before
+                            art_style_prompt_text = f"""thoroughly describe the style of the image at {raw_image_link} in detail. 
 Output in following json format:
 {{
     "style": {{
@@ -188,37 +208,13 @@ Output in following json format:
     }},
     "additional notes": ""
 }}"""
-                            try:
-                                response = gpt_client.chat.completions.create(
-                                    model="gpt-4o", # Updated model name to gpt-4o
-                                    messages=[
-                                        {
-                                            "role": "user",
-                                            "content": [
-                                                {"type": "text", "text": art_style_prompt},
-                                                {
-                                                    "type": "image_url",
-                                                    "image_url": {
-                                                        "url": raw_image_link,
-                                                    },
-                                                },
-                                            ],
-                                        }
-                                    ],
-                                    max_tokens=1000 # Adjust as needed
-                                )
-                                gpt_response_content = response.choices[0].message.content
-                                print(f"GPT Art Style Response: {gpt_response_content}")
-                                # Attempt to parse the JSON from GPT's response
-                                # The response might have ```json ... ``` markdown, try to extract it.
-                                if gpt_response_content.strip().startswith("```json"):
-                                    json_block = gpt_response_content.strip()[7:-3].strip() # Remove ```json and ```
-                                else:
-                                    json_block = gpt_response_content
-                                art_style_info = json.loads(json_block)
-                            except Exception as e:
-                                print(f"Error calling GPT for art style or parsing JSON: {e}")
-                                art_style_info = {"error": f"Failed to get art style from GPT: {e}"}
+                            gpt_response = gpt_client.chat.completions.create(
+                                model="gpt-4o", messages=[{"role":"user","content":[{"type":"text","text":art_style_prompt_text},{"type":"image_url","image_url":{"url":raw_image_link}}]}] , max_tokens=1000
+                            )
+                            gpt_content = gpt_response.choices[0].message.content
+                            if gpt_content.strip().startswith("```json"): json_block = gpt_content.strip()[7:-3].strip()
+                            else: json_block = gpt_content
+                            art_style_info = json.loads(json_block)
                         elif not gpt_client:
                             art_style_info = {"error": "GPT client not initialized. Check API key."}
                         else:
@@ -245,37 +241,65 @@ Output in following json format:
         # --- Placeholder for Brainstorm & Research Logic ---
         # In future phases, this is where calls to Grok/XAI and GPT will happen.
         
-        # Mocked research_info (based on ReadMe structure)
-        mock_ip_trends = {
-            "IP trends": {
-                "observations": "Mock observation about IP trends.",
-                "notable Shows and Movies": ["Mock Show 1", "Mock Movie A"],
-                "popular characters": ["Mock Character X", "Mock Character Y"],
-                "competitor games": ["Mock Game Z"]
-            }
-        }
-        mock_event_trends = {
-            "Event trends": {
-                "observations": "Mock observation about event trends.",
-                "notable Shows and Movies": ["Event Show 2", "Event Movie B"],
-                "popular characters": ["Event Character P"],
-                "competitor games": ["Event Game Q"]
-            }
-        }
-        research_info = {**mock_ip_trends, **mock_event_trends} # Simple merge
+        # --- XAI/Grok API Calls for Research --- 
+        if xai_client:
+            # 1. IP Trends Research
+            ip_trends_prompt_text = f"""you are the customer research specialist working on identifying popular trends aligning with the [{data.get('ip_description', '')}] direction and [{data.get('target_audience', '')}] interest. Make a concise list of latest key trends from entertainment media and social media trends. Output in following jason format:
+            {{
+                "IP trends":{{
+                    observations:"",
+                    "notable Shows and Movies":[],
+                    "popular characters":[],
+                    "competitor games":[]
+                }}
+            }} """
+            print("Requesting IP Trends from XAI/Grok...")
+            try:
+                ip_trends_response = xai_client.chat.completions.create(
+                    model="grok-3", # As per XAI documentation
+                    messages=[{"role": "user", "content": ip_trends_prompt_text}],
+                    # temperature=0.7 # Optional: add if needed
+                )
+                ip_trends_content = ip_trends_response.choices[0].message.content
+                print(f"XAI IP Trends Raw Response: {ip_trends_content}")
+                ip_trends_data = json.loads(ip_trends_content) # Assuming Grok directly returns the JSON string for these prompts
+            except Exception as e:
+                print(f"Error calling XAI for IP Trends or parsing JSON: {e}")
+                ip_trends_data = {"error": f"Failed to get IP Trends from XAI/Grok: {e}"}
 
-        # Mocked brainstorm (based on ReadMe structure)
+            # 2. Event Trends Research
+            event_trends_prompt_text = f"""you are the marketing research specialist working on identifying popular trends aligning with the [{data.get('ip_description', '')}], [{data.get('description', '')}] direction based on [{data.get('target_audience', '')}] interest in the context of [{data.get('event_name', '')}]. Make a concise list of key trends from entertainment media and social media trends. Output in following jason format:
+            {{
+                "Event trends":{{
+                    observations:"",
+                    "notable Shows and Movies":[],
+                    "popular characters":[],
+                    "competitor games":[]
+                }}
+            }} """
+            print("Requesting Event Trends from XAI/Grok...")
+            try:
+                event_trends_response = xai_client.chat.completions.create(
+                    model="grok-3", # As per XAI documentation
+                    messages=[{"role": "user", "content": event_trends_prompt_text}]
+                )
+                event_trends_content = event_trends_response.choices[0].message.content
+                print(f"XAI Event Trends Raw Response: {event_trends_content}")
+                event_trends_data = json.loads(event_trends_content) # Assuming Grok directly returns the JSON string
+            except Exception as e:
+                print(f"Error calling XAI for Event Trends or parsing JSON: {e}")
+                event_trends_data = {"error": f"Failed to get Event Trends from XAI/Grok: {e}"}
+        else:
+            print("XAI client not initialized. Skipping XAI/Grok calls.")
+            ip_trends_data = {"error": "XAI client not initialized. Check API key."}
+            event_trends_data = {"error": "XAI client not initialized. Check API key."}
+
+        # --- Mocked data for remaining steps (will be replaced in future phases) ---
         brainstorm_output = {
             "concept_name": f"Mock Concept for {data.get('description', 'N/A')}",
             "level1": {"name": "Level 1 Mock", "description": "Desc 1", "elements": ["Elem A"]},
-            "level2": {"name": "Level 2 Mock", "description": "Desc 2", "elements": ["Elem B"]},
-            "level3": {"name": "Level 3 Mock", "description": "Desc 3", "elements": ["Elem C"]},
-            "level4": {"name": "Level 4 Mock", "description": "Desc 4", "elements": ["Elem D"]},
-            "level5": {"name": "Level 5 Mock", "description": "Desc 5", "elements": ["Elem E"]},
             "level6": {"name": "Level 6 Mock", "description": "Desc 6", "elements": ["Elem F"]}
         }
-        
-        # Mocked feedback (based on ReadMe structure)
         feedback_output = {
             "evaluation": {
                 f"level{i+1}": {
@@ -285,24 +309,20 @@ Output in following json format:
                 } for i in range(6)
             }
         }
-
-        # Mocked final_result (adjusting brainstorm based on feedback - simplified for mock)
         final_result_output = brainstorm_output 
         final_result_output["concept_name"] += " (Adjusted)"
-
-
-        # --- Placeholder for Image Generation ---
-        # Mocked image URL
-        mock_image_url = "/static/mock_image.png" # We'll need a placeholder image
+        mock_generated_asset_image_url = "/static/mock_image.png" 
 
         response_data = {
-            "research_info_grok_ip": mock_ip_trends,
-            "research_info_grok_event": mock_event_trends,
-            "art_style_gpt": art_style_info,
+            "research_info_grok_ip": ip_trends_data, # Now uses actual XAI response or error
+            "research_info_grok_event": event_trends_data, # Now uses actual XAI response or error
+            "art_style_gpt": art_style_info, 
             "brainstorm_gpt": brainstorm_output,
             "feedback_gpt": feedback_output,
             "final_result_gpt": final_result_output,
-            "generated_image_url": mock_image_url
+            "uploaded_sample_image_url": sample_image_url, 
+            "raw_github_image_link": raw_image_link, 
+            "generated_image_url": mock_generated_asset_image_url 
         }
         
         return jsonify(response_data)

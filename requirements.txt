@@ -1,4 +1,5 @@
 Flask
 python-dotenv
 GitPython
-openai 
+openai
+requests 

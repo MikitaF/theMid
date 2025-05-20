@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Automated Art Generator - theMid</title>
+    <style>
+        body { font-family: sans-serif; margin: 20px; background-color: #f4f4f4; color: #333; }
+        .container { background-color: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
+        h2, h3 { color: #555; border-bottom: 1px solid #eee; padding-bottom: 5px; margin-top: 30px;}
+        label { display: block; margin-top: 10px; font-weight: bold; }
+        input[type='text'], input[type='file'], select, textarea {
+            width: calc(100% - 22px);
+            padding: 10px;
+            margin-top: 5px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+        button { 
+            background-color: #007bff; color: white; padding: 10px 15px; 
+            border: none; border-radius: 4px; cursor: pointer; margin-top: 20px;
+            font-size: 16px;
+        }
+        button:hover { background-color: #0056b3; }
+        textarea { min-height: 100px; }
+        .output-section { margin-top: 20px; padding: 15px; background-color: #e9ecef; border-radius: 4px; }
+        .output-section h4 { margin-top: 0; color: #007bff; }
+        pre { background-color: #333; color: #fff; padding: 10px; border-radius: 4px; white-space: pre-wrap; word-wrap: break-word; }
+        #loadingMessage { display: none; color: #007bff; font-weight: bold; margin-top: 15px; }
+        img#generatedImage { max-width: 100%; margin-top: 10px; border: 1px solid #ddd; border-radius: 4px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Automated Art Generator - theMid</h1>
+
+        <form id="assetForm">
+            <h2>Settings</h2>
+            <p>
+                <em>API keys and Git credentials should be set in your <code>.env</code> file.</em><br>
+                GPT_API_KEY, XAI_API_KEY (for Grok), GIT_USERNAME, GIT_TOKEN.
+            </p>
+            
+            <h2>Game Info</h2>
+            <label for="ip_name">IP Name:</label>
+            <input type="text" id="ip_name" name="ip_name" required>
+
+            <label for="ip_description">IP Description:</label>
+            <textarea id="ip_description" name="ip_description" required></textarea>
+
+            <label for="target_audience">Target Audience:</label>
+            <input type="text" id="target_audience" name="target_audience" required>
+
+            <h2>Asset Info</h2>
+            <label for="asset_type">Asset Type:</label>
+            <select id="asset_type" name="asset_type">
+                <option value="character_concept">Character Concept</option>
+                <option value="character_portrait">Character Portrait</option>
+                <option value="game_item">Game Item</option>
+                <option value="building">Building</option>
+            </select>
+
+            <label for="entity">Entity:</label>
+            <select id="entity" name="entity">
+                <option value="player">Player</option>
+                <option value="friendly_npc">Friendly NPC</option>
+                <option value="enemy">Enemy</option>
+            </select>
+
+            <label for="description_input">Description:</label>
+            <input type="text" id="description_input" name="description" required>
+
+            <label for="event_name">Event Name (e.g., Halloween, Christmas):</label>
+            <input type="text" id="event_name" name="event_name">
+
+            <h2>Art Reference</h2>
+            <label for="sample_image">Sample Image:</label>
+            <input type="file" id="sample_image" name="sample_image" accept="image/*">
+            <p><em>Image will be copied, pushed to Git, and a raw link used (simulated for now).</em></p>
+
+            <button type="button" id="createAssetButton">Create an Asset</button>
+            <button type="button" id="populateTestDataButton" style="background-color: #5cb85c; margin-left: 10px;">Populate Test Data</button>
+            <p id="testImagePathNote" style="font-style: italic; margin-top: 5px;"></p>
+
+        </form>
+
+        <div id="loadingMessageContainer" style="display: none; margin-top: 15px;">
+            <span id="loadingText">Generation in progress...</span>
+            <span id="loadingSpinner" style="display: inline-block; width: 10px; text-align: left;">|</span>
+        </div>
+
+        <div id="resultsSection" style="display: none;">
+            <h2>Brainstorm and Research Outputs</h2>
+            
+            <div class="output-section">
+                <h4>Grok - IP Trends</h4>
+                <pre id="grokIpTrendsOutput"></pre>
+            </div>
+
+            <div class="output-section">
+                <h4>Grok - Event Trends</h4>
+                <pre id="grokEventTrendsOutput"></pre>
+            </div>
+
+            <div class="output-section">
+                <h4>GPT - Art Style Description</h4>
+                <pre id="gptArtStyleOutput"></pre>
+            </div>
+            
+            <div class="output-section">
+                <h4>GPT - Brainstorm (Mocked)</h4>
+                <pre id="gptBrainstormOutput"></pre>
+            </div>
+
+            <div class="output-section">
+                <h4>GPT - Feedback on Brainstorm (Mocked)</h4>
+                <pre id="gptFeedbackOutput"></pre>
+            </div>
+
+            <div class="output-section">
+                <h4>GPT - Final Result (Mocked)</h4>
+                <pre id="gptFinalResultOutput"></pre>
+            </div>
+
+            <h2>Art Reference & Asset Creation Output</h2>
+            <div class="output-section">
+                <h4>Uploaded Sample Image (Local Path)</h4>
+                <p><a id="uploadedSampleImageLink" href="#" target="_blank"></a></p>
+                <img id="uploadedSampleImagePreview" src="" alt="Uploaded Sample Image" style="max-width: 200px; max-height: 200px; display: none;">
+            </div>
+            <div class="output-section">
+                <h4>Uploaded Sample Image (Raw GitHub Link)</h4>
+                <p><a id="rawGithubImageLink" href="#" target="_blank"></a></p>
+            </div>
+
+            <div class="output-section">
+                <h4>Generated Asset Image (Mocked)</h4>
+                <img id="generatedImage" src="" alt="Generated Asset Image">
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let loadingInterval = null;
+        const spinnerChars = ['|', '/', '-', '\\'];
+        let spinnerIndex = 0;
+
+        function startLoadingAnimation() {
+            const loadingMessageContainer = document.getElementById('loadingMessageContainer');
+            const loadingSpinner = document.getElementById('loadingSpinner');
+            loadingMessageContainer.style.display = 'block';
+            if (loadingInterval) clearInterval(loadingInterval);
+            loadingInterval = setInterval(() => {
+                spinnerIndex = (spinnerIndex + 1) % spinnerChars.length;
+                loadingSpinner.textContent = spinnerChars[spinnerIndex];
+            }, 200); // Adjust speed here (milliseconds)
+        }
+
+        function stopLoadingAnimation() {
+            const loadingMessageContainer = document.getElementById('loadingMessageContainer');
+            if (loadingInterval) clearInterval(loadingInterval);
+            loadingInterval = null;
+            loadingMessageContainer.style.display = 'none';
+        }
+
+        document.getElementById('createAssetButton').addEventListener('click', async function() {
+            const form = document.getElementById('assetForm');
+            const formData = new FormData(form);
+            const resultsSection = document.getElementById('resultsSection');
+
+            startLoadingAnimation();
+            resultsSection.style.display = 'none';
+
+            // Basic client-side validation (can be expanded)
+            let isValid = true;
+            form.querySelectorAll('[required]').forEach(input => {
+                if (!input.value) {
+                    isValid = false;
+                    input.style.borderColor = 'red';
+                } else {
+                    input.style.borderColor = '#ddd';
+                }
+            });
+
+            if (!isValid) {
+                stopLoadingAnimation();
+                alert('Please fill in all required fields.');
+                return;
+            }
+
+            try {
+                const response = await fetch('/create_asset', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+
+                const results = await response.json();
+
+                document.getElementById('grokIpTrendsOutput').textContent = JSON.stringify(results.research_info_grok_ip, null, 2);
+                document.getElementById('grokEventTrendsOutput').textContent = JSON.stringify(results.research_info_grok_event, null, 2);
+                document.getElementById('gptArtStyleOutput').textContent = JSON.stringify(results.art_style_gpt, null, 2);
+                document.getElementById('gptBrainstormOutput').textContent = JSON.stringify(results.brainstorm_gpt, null, 2);
+                document.getElementById('gptFeedbackOutput').textContent = JSON.stringify(results.feedback_gpt, null, 2);
+                document.getElementById('gptFinalResultOutput').textContent = JSON.stringify(results.final_result_gpt, null, 2);
+                
+                const uploadedSampleImageLink = document.getElementById('uploadedSampleImageLink');
+                const uploadedSampleImagePreview = document.getElementById('uploadedSampleImagePreview');
+                if (results.uploaded_sample_image_url) {
+                    uploadedSampleImageLink.textContent = results.uploaded_sample_image_url;
+                } else {
+                    uploadedSampleImageLink.textContent = 'N/A';
+                    uploadedSampleImagePreview.style.display = 'none';
+                }
+
+                const rawGithubLink = document.getElementById('rawGithubImageLink');
+                if (results.raw_github_image_link) {
+                    if (results.raw_github_image_link.startsWith("Error") || results.raw_github_image_link.startsWith("Git configuration error") || results.raw_github_image_link.startsWith("Unexpected Git error") || results.raw_github_image_link.startsWith("File type not allowed")) {
+                        rawGithubLink.textContent = results.raw_github_image_link;
+                        rawGithubLink.href = '#';
+                    } else {
+                        rawGithubLink.textContent = results.raw_github_image_link;
+                        rawGithubLink.href = results.raw_github_image_link;
+                    }
+                } else {
+                    rawGithubLink.textContent = 'N/A';
+                    rawGithubLink.href = '#';
+                }
+
+                const imageElement = document.getElementById('generatedImage');
+                if (results.generated_image_url) {
+                    imageElement.src = results.generated_image_url;
+                    imageElement.style.display = 'block';
+                } else {
+                    imageElement.style.display = 'none';
+                }
+
+                resultsSection.style.display = 'block';
+            } catch (error) {
+                console.error('Error creating asset:', error);
+                alert('An error occurred while creating the asset. Check the console for details.');
+            } finally {
+                stopLoadingAnimation();
+            }
+        });
+
+        document.getElementById('populateTestDataButton').addEventListener('click', function() {
+            document.getElementById('ip_name').value = 'Goblin Kitchen';
+            document.getElementById('ip_description').value = 'Resource management game about goblins running a restaurant';
+            document.getElementById('target_audience').value = 'Broad casual 16-18 years old';
+            
+            document.getElementById('asset_type').value = 'character_concept';
+            document.getElementById('entity').value = 'friendly_npc';
+            document.getElementById('description_input').value = 'Restaurant customer'; // Changed from theme to description
+            document.getElementById('event_name').value = 'Christmas';
+
+            // For the sample image, we can't set the file input directly.
+            // We'll clear it and show a note about the intended test image.
+            const sampleImageInput = document.getElementById('sample_image');
+            sampleImageInput.value = null; // Clears any selected file
+            document.getElementById('testImagePathNote').textContent = 'Test Image Path for this data: uploads/c3b50936b73f4bf28aded60592ce2872.jpg (Please select manually if needed)';
+            
+            // Optional: If you have a preview for the *currently selected* image, clear it or update it.
+            // Example: if you had an <img id="sampleImagePreview">, you might do:
+            // document.getElementById('sampleImagePreview').style.display = 'none'; 
+            // document.getElementById('sampleImagePreview').src = '';
+
+            alert('Form populated with test data! Please select the sample image manually if you intend to use it.');
+        });
+    </script>
+</body>
+</html> 
