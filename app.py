@@ -317,10 +317,12 @@ IP Description: {data.get('ip_description', '')}
 Research Information:
 {research_info_json_string}
 
+Focus the 'visual_design' on 1-3 core distinguishing features or thematic elements that can be clearly evolved across a 6-level progression. Avoid overly detailed lists of minor accessories at this stage.
+
 Output ONLY a single JSON object with the following structure:
 {{
     "concept_name": "<Generated Concept Name>",
-    "visual_design": "<Detailed Visual Design Description>"
+    "visual_design": "<Focused Visual Design Description highlighting 1-3 core features>"
 }}"""
             print("\n--- Requesting Initial Concept & Visual Design from GPT (Step 1) ---")
             print(f"GPT Initial Concept Prompt:\n{prompt_step1_text}\n")
@@ -367,12 +369,12 @@ Progression Rules:
 Output ONLY a single JSON object with the following structure (ensure 'concept_name' is '[{concept_name_from_gpt}]'):
 {{
     "concept_name": "{concept_name_from_gpt}",
-    "level1": {{ "name": "", "description": "", "elements": [] }},
-    "level2": {{ "name": "", "description": "", "elements": [] }},
-    "level3": {{ "name": "", "description": "", "elements": [] }},
-    "level4": {{ "name": "", "description": "", "elements": [] }},
-    "level5": {{ "name": "", "description": "", "elements": [] }},
-    "level6": {{ "name": "", "description": "", "elements": [] }}
+    "level1": {{ "name": "", "description": "", "elements": ["<1-2 key distinguishing elements>"] }},
+    "level2": {{ "name": "", "description": "", "elements": ["<1-2 key distinguishing elements>"] }},
+    "level3": {{ "name": "", "description": "", "elements": ["<1-2 key distinguishing elements>"] }},
+    "level4": {{ "name": "", "description": "", "elements": ["<1-2 key distinguishing elements>"] }},
+    "level5": {{ "name": "", "description": "", "elements": ["<1-2 key distinguishing elements>"] }},
+    "level6": {{ "name": "", "description": "", "elements": ["<1-2 key distinguishing elements>"] }}
 }}"""
             print("\n--- Requesting Progression Brainstorm from GPT (Step 2) ---")
             print(f"GPT Progression Prompt:\n{prompt_step2_text}\n")
@@ -506,15 +508,119 @@ Output ONLY the adjusted brainstorm as a single JSON object, maintaining the exa
         
         # Fallback for final_result_output if it's empty or an error, to ensure concept_name is present for UI
         if not final_result_output or "error" in final_result_output:
-            if "error" in brainstorm_output:
+            if "error" in brainstorm_output: # If brainstorm itself had an error
                  final_result_output = {"concept_name": concept_name_from_gpt + " (Error in brainstorm)", **brainstorm_output}
-            else:
-                 # Use the brainstorm_output as a base if feedback or final iteration failed
-                 final_result_output = brainstorm_output.copy() if isinstance(brainstorm_output, dict) else {"concept_name": concept_name_from_gpt + " (Error in feedback/final step)"}
-                 if "concept_name" in final_result_output and not final_result_output.get("error"): # check if brainstorm_output was not an error itself
-                    final_result_output["concept_name"] = final_result_output.get("concept_name", concept_name_from_gpt) + " (Feedback/Final step failed)"
-                 elif not "concept_name" in final_result_output: # if brainstorm_output was an error without concept_name
-                    final_result_output["concept_name"] = concept_name_from_gpt + " (Error in feedback/final step)"
+            else: # If brainstorm was okay, but feedback or final iteration failed
+                 current_concept_name = brainstorm_output.get("concept_name", concept_name_from_gpt) if isinstance(brainstorm_output, dict) else concept_name_from_gpt
+                 final_result_output = brainstorm_output.copy() if isinstance(brainstorm_output, dict) else {"concept_name": current_concept_name}
+                 
+                 if "error" not in final_result_output: # If brainstorm_output was copied and was not an error itself
+                    final_result_output["concept_name"] = current_concept_name + " (Feedback/Final step failed or used brainstorm)"
+                 else: # If brainstorm_output was an error or not a dict, ensure a concept_name is present
+                    final_result_output["concept_name"] = current_concept_name + " (Error in prior steps)"
+                 # Ensure the error from previous step is preserved if it exists
+                 if "error" in feedback_output and "error" not in final_result_output:
+                     final_result_output["error_from_feedback"] = feedback_output["error"]
+                 elif "error" in final_result_output and "error" in feedback_output :
+                     final_result_output["error"] = f"{final_result_output.get('error','prior error')} AND {feedback_output.get('error','feedback error')}"
+
+        # --- GPT - Image Creation (DALL-E) ---
+        generated_asset_image_url = "/static/mock_image.png" # Default/fallback
+        image_generation_error = None
+
+        final_result_valid = isinstance(final_result_output, dict) and "error" not in final_result_output
+        art_style_valid = isinstance(art_style_info, dict) and "error" not in art_style_info
+
+        if gpt_client and final_result_valid and art_style_valid:
+            try:
+                concept_name = final_result_output.get("concept_name", "Unnamed Concept")
+                
+                # Get asset details from form data for the new prompt
+                asset_description_from_form = data.get('asset_description', 'N/A')
+                entity_from_form = data.get('entity', 'N/A')
+                asset_type_from_form = data.get('asset_type', 'N/A')
+
+                # Convert final_result and art_style to JSON strings for the prompt
+                # Using compact representation by specifying separators
+                # --- Process final_result_output to simplify for DALL-E ---
+                processed_final_result_for_dalle = {}
+                if isinstance(final_result_output, dict) and "error" not in final_result_output:
+                    processed_final_result_for_dalle["concept_name"] = final_result_output.get("concept_name", "Unnamed Concept")
+                    for i in range(1, 7): # Levels 1 to 6
+                        level_key = f"level{i}"
+                        original_level_data = final_result_output.get(level_key)
+                        if isinstance(original_level_data, dict):
+                            simplified_desc = original_level_data.get("description", "")
+                            # Truncate description to first sentence or ~120 chars
+                            if "." in simplified_desc:
+                                simplified_desc = simplified_desc.split(".")[0] + "."
+                            if len(simplified_desc) > 120:
+                                simplified_desc = simplified_desc[:117] + "..."
+                            
+                            # Ensure elements are simple strings and limit to 2-3 impactful ones if many
+                            original_elements = original_level_data.get("elements", [])
+                            simplified_elements = [str(el)[:50] for el in original_elements[:3]] # Take first 3, truncate length
+
+                            processed_final_result_for_dalle[level_key] = {
+                                "name": original_level_data.get("name", f"Level {i}"),
+                                "description": simplified_desc,
+                                "elements": simplified_elements
+                            }
+                        else:
+                            # Handle case where a level might be missing or not a dict
+                            processed_final_result_for_dalle[level_key] = {"name": f"Level {i} data missing", "description": "", "elements": []}
+                else:
+                    # If final_result_output itself is an error or not a dict, pass it as is or a placeholder
+                    processed_final_result_for_dalle = final_result_output 
+
+                final_result_json_string = json.dumps(processed_final_result_for_dalle, separators=(',', ':'))
+                art_style_json_string = json.dumps(art_style_info, separators=(',', ':'))
+
+                image_prompt_text = f"""create an image 3:2 aspect ratio
+with a grid consisting of a 6 same size squares
+the grid consists of 2 rows by 3 squares each
+each square has a tiny [level #] text in it's very left top corner
+top row level 1, level 2, level 3
+bottom row level 4, level 5, level 6
+
+add a {asset_description_from_form} {entity_from_form} {asset_type_from_form} progression having a separate concept in every square
+the concepts should the progression from a very basic initial level to fully evolved subject in level 6.
+design notes:
+{final_result_json_string}
+"""
+                # The detailed breakdown like formatted_art_style and levels_prompt_part is replaced by the above.
+                
+                print("\n--- Requesting Image Grid from DALL-E (User-defined Prompt) ---")
+                print(f"DALL-E Image Grid Prompt:\n{image_prompt_text}\n")
+
+                image_response = gpt_client.images.generate(
+                    model="dall-e-3",
+                    prompt=image_prompt_text,
+                    n=1,
+                    size="1792x1024", # Landscape aspect ratio suitable for a 2x3 grid
+                    quality="standard", # Use "hd" for higher detail if preferred and budget allows
+                    # style="vivid" # or "natural" - DALL-E 3 specific
+                )
+                generated_asset_image_url = image_response.data[0].url
+                print(f"DALL-E generated image URL: {generated_asset_image_url}")
+
+            except Exception as e:
+                error_message = f"Failed to generate image with DALL-E: {str(e)}"
+                print(f"Error during DALL-E image generation: {error_message}")
+                image_generation_error = error_message
+                # generated_asset_image_url remains "/static/mock_image.png" (set by default)
+        
+        elif not gpt_client:
+            image_generation_error = "GPT client not initialized. Skipping DALL-E call."
+        elif not final_result_valid:
+            error_detail = final_result_output.get('error', 'Unknown error') if isinstance(final_result_output, dict) else 'Data is not a dictionary'
+            image_generation_error = f"Skipping DALL-E call due to error/invalid format in final result: {error_detail}"
+        elif not art_style_valid:
+            error_detail = art_style_info.get('error', 'Unknown error') if isinstance(art_style_info, dict) else 'Data is not a dictionary'
+            image_generation_error = f"Skipping DALL-E call due to error/invalid format in art style: {error_detail}"
+        
+        if image_generation_error:
+            print(f"Image Generation Status: {image_generation_error}")
 
         mock_generated_asset_image_url = "/static/mock_image.png"
 
@@ -528,7 +634,8 @@ Output ONLY the adjusted brainstorm as a single JSON object, maintaining the exa
             "final_result_gpt": final_result_output,
             "uploaded_sample_image_url": sample_image_url, 
             "raw_github_image_link": raw_image_link, 
-            "generated_image_url": mock_generated_asset_image_url 
+            "generated_image_url": generated_asset_image_url,
+            "image_generation_error": image_generation_error
         }
         
         return jsonify(response_data)

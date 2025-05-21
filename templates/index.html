@@ -125,7 +125,13 @@
 
             <div class="output-section">
                 <h4>GPT - Final Result (Iterated Brainstorm)</h4>
-                <pre id="gptFinalResultOutput"></pre>
+                <pre id="final-result-gpt-output">Awaiting results...</pre>
+            </div>
+
+            <div class="output-section">
+                <h4>Generated Asset Image</h4>
+                <p>Image generation status: <span id="image-generation-status">Awaiting generation...</span></p>
+                <img id="generated-asset-image" src="/static/mock_image.png" alt="Generated Asset Image" style="max-width: 100%; height: auto;">
             </div>
 
             <h2>Art Reference & Asset Creation Output</h2>
@@ -137,11 +143,6 @@
             <div class="output-section">
                 <h4>Uploaded Sample Image (Raw GitHub Link)</h4>
                 <p><a id="rawGithubImageLink" href="#" target="_blank"></a></p>
-            </div>
-
-            <div class="output-section">
-                <h4>Generated Asset Image (Mocked)</h4>
-                <img id="generatedImage" src="" alt="Generated Asset Image">
             </div>
         </div>
     </div>
@@ -225,8 +226,30 @@
 
                 document.getElementById('gptBrainstormOutput').textContent = JSON.stringify(results.brainstorm_gpt, null, 2);
                 document.getElementById('gptFeedbackOutput').textContent = JSON.stringify(results.feedback_gpt, null, 2);
-                document.getElementById('gptFinalResultOutput').textContent = JSON.stringify(results.final_result_gpt, null, 2);
                 
+                // GPT - Final Result (Iterated Brainstorm)
+                const finalResultGPTOutput = document.getElementById('final-result-gpt-output');
+                if (results.final_result_gpt) {
+                    finalResultGPTOutput.textContent = JSON.stringify(results.final_result_gpt, null, 2);
+                } else {
+                    finalResultGPTOutput.textContent = 'No final result data received.';
+                }
+
+                // Generated Asset Image
+                const generatedAssetImage = document.getElementById('generated-asset-image');
+                const imageGenerationStatus = document.getElementById('image-generation-status');
+                
+                if (results.image_generation_error) {
+                    imageGenerationStatus.textContent = `Error: ${results.image_generation_error}`;
+                    generatedAssetImage.src = "/static/mock_image.png"; // Show mock if error
+                } else if (results.generated_image_url) {
+                    generatedAssetImage.src = results.generated_image_url;
+                    imageGenerationStatus.textContent = "Image generated successfully.";
+                } else {
+                    generatedAssetImage.src = "/static/mock_image.png"; // Fallback to mock
+                    imageGenerationStatus.textContent = "No image URL received, showing mock image.";
+                }
+
                 const uploadedSampleImageLink = document.getElementById('uploadedSampleImageLink');
                 const uploadedSampleImagePreview = document.getElementById('uploadedSampleImagePreview');
                 if (results.uploaded_sample_image_url) {
@@ -248,14 +271,6 @@
                 } else {
                     rawGithubLink.textContent = 'N/A';
                     rawGithubLink.href = '#';
-                }
-
-                const imageElement = document.getElementById('generatedImage');
-                if (results.generated_image_url) {
-                    imageElement.src = results.generated_image_url;
-                    imageElement.style.display = 'block';
-                } else {
-                    imageElement.style.display = 'none';
                 }
 
                 resultsSection.style.display = 'block';
