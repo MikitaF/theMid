@@ -165,13 +165,13 @@ def create_asset_route():
 
         # --- Call GPT to describe Art Style (uses raw_image_link from either upload or direct input) ---
         if gpt_client and raw_image_link:
-            art_style_prompt_text = f"""thoroughly describe the style of the image at {raw_image_link} in detail. Focus on the art direction and style instead of the subject itself. Output in following json format:
+            art_style_prompt_text = f"""thoroughly describe the style of the image at {raw_image_link} in detail. Focus on the art direction and style instead of the subject itself. Avoide unnecessary flavour adjectives. Output in following json format:
 {{
     "style": {{"description": "", "scale":"realistic/cartoony/exaggerated"}},
     "linework":{{"outline": true/false, "thickness": "very thin/medium/bold", "style": "clean and consistent/rough and abrupt", "color": "darker shade of fill tone to preserve cohesion"}},
     "color_palette": {{"type": "vivid rgb/neon/realistic/narrow palette/gritty/minimalist", "saturation": "saturated/grayscale/pastelle", "accents":"yes/no", "main colours":[]}},
     "visual_density": {{"level": "low/mid/high/etremly detailed"}},
-    "additional notes": ""
+    "additional notes": "describe the style in a concise manner professional specification style"
 }}
 """ # Ensure this prompt is exactly as you need it.
             print(f"\n--- Sending to GPT for Art Style Analysis (Source: {raw_image_link}) ---")
@@ -216,8 +216,6 @@ def create_asset_route():
                 print(f"Error XAI IP Trends: {e}")
                 ip_trends_data = {"error": f"Failed XAI IP Trends: {e}"}
 
-            event_trends_prompt_text = f"""you are the marketing research specialist... Output in following jason format: {{"Event trends":{{"observations":"","notable Shows and Movies":[],"popular characters":[],"competitor games":[]}}}}""" # Shortened for brevity
-            # (Full prompt text as in original)
             event_trends_prompt_text = f"""you are the marketing research specialist working on identifying popular trends aligning with the [{data.get('ip_description', '')}], [{data.get('asset_description', '')}] direction based on [{data.get('target_audience', '')}] interest in the context of [{data.get('event_name', '')}]. Make a concise list of key trends from entertainment media and social media trends. Output in following jason format:
             {{
                 "Event trends":{{
@@ -245,15 +243,16 @@ def create_asset_route():
         # --- Step 1: GPT - Initial Concept & Visual Design (theMid 1.1) ---
         initial_concept_output = {}
         if gpt_client:
-            prompt_initial_concept_text = f"""Given the following asset details and research information, generate a unique concept name and a detailed visual design description for a [{data.get('asset_description', '')}] [{data.get('entity', '')}] [{data.get('asset_type', '')}] within a [{data.get('ip_description', '')}] game.
-                                            Asset Description: {data.get('asset_description', '')}
-                                            Entity: {data.get('entity', '')}
-                                            Asset Type: {data.get('asset_type', '')}
-                                            IP Description: {data.get('ip_description', '')}
-                                            Research Information:
-                                            {research_info_json_string}
-                                            Focus the 'visual_design' on core distinguishing features or thematic elements.
-                                            Output ONLY a single JSON object: {{"concept_name": "<Name>", "visual_design": "<Description>"}}"""
+            prompt_initial_concept_text = f"""Given the following asset details and research information, generate a unique concept name and a concise visual design description for a [{data.get('asset_description', '')}] [{data.get('entity', '')}] [{data.get('asset_type', '')}] within a [{data.get('ip_description', '')}] game.
+Asset Description: {data.get('asset_description', '')}
+Entity: {data.get('entity', '')}
+Asset Type: {data.get('asset_type', '')}
+IP Description: {data.get('ip_description', '')}
+Research Information:
+{research_info_json_string}
+Focus the 'visual_design' on core distinguishing features or thematic elements.
+Output ONLY a single JSON object: {{"concept_name": "<Name>", "visual_design": "<Description>"}}"""
+            
             print("\n--- GPT: Initial Concept & Visual Design ---")
             print(f"Prompt:\n{prompt_initial_concept_text}\n")
             try:
@@ -305,20 +304,21 @@ Provide actionable feedback. Output ONLY a single JSON object: {{"evaluation": {
         optimized_leonardo_prompt = ""
         if gpt_client and "error" not in refined_concept_output and "error" not in art_style_info:
             prompt_for_leo_optimization_text = f"""You are an expert prompt engineer for AI image generation services like LeonardoAI, which has a character limit of around 1500 characters for prompts.
-                                                Given the following detailed [Concept] and [Art Style] information, synthesize them into a single, concise, and highly effective image generation prompt.
-                                                The prompt should be purely descriptive, focusing on keywords, visual details, and artistic direction.
-                                                Avoid conversational language, JSON syntax, or any explanatory text.
-                                                The generated prompt must be less than 1400 characters.
+Given the following [Concept] and [Art Style] information, synthesize them into a single, concise, and highly effective image generation prompt.
+The prompt should be purely descriptive, focusing on keywords, visual details, and artistic direction.
+Avoid conversational language, JSON syntax, or any explanatory text.
+The generated prompt must be less than 1400 characters.
 
-                                                [Concept]:
-                                                {json.dumps(refined_concept_output, indent=2)}
+[Concept]:
+{json.dumps(refined_concept_output, indent=2)}
 
-                                                [Art Style]:
-                                                {json.dumps(art_style_info, indent=2)}
+[Art Style]:
+{json.dumps(art_style_info, indent=2)}
 
-                                                Output ONLY the refined image generation prompt string. Make it dense with descriptive keywords and artistic direction.
-                                                Refined Prompt for LeonardoAI:
-                                                """
+Output ONLY the refined image generation prompt string. Make it dense with descriptive keywords and artistic direction.
+Refined Prompt for LeonardoAI:
+"""
+            
             print("\n--- GPT: Optimize Prompt for LeonardoAI ---")
             print(f"Prompt for Optimization (summary):\nConcept Name: {refined_concept_output.get('concept_name', 'N/A')}, Art Style Keys: {list(art_style_info.keys()) if isinstance(art_style_info,dict) else 'N/A'}")
             # print(f"Full Prompt for Optimization:\n{prompt_for_leo_optimization_text}\n") # Potentially very long
@@ -376,7 +376,7 @@ Provide actionable feedback. Output ONLY a single JSON object: {{"evaluation": {
             current_image_prompt_text = optimized_leonardo_prompt 
 
             MAX_ATTEMPTS = 3
-            QUALITY_THRESHOLD = 7 
+            QUALITY_THRESHOLD = 9 
             LEONARDO_MODEL_ID = "b2614463-296c-462a-9586-aafdb8f00e36"
             LEONARDO_API_ENDPOINT_GENERATIONS = "https://cloud.leonardo.ai/api/rest/v1/generations"
             LEONARDO_API_ENDPOINT_GET_GENERATION = "https://cloud.leonardo.ai/api/rest/v1/generations/{generationId}"
@@ -536,7 +536,7 @@ Provide actionable feedback. Output ONLY a single JSON object: {{"evaluation": {
 Refined Concept: {json.dumps(refined_concept_output, indent=2)}
 Art Style: {json.dumps(art_style_info, indent=2)}
 Prompt: {current_image_prompt_text}
-For each image, assess fit, readability/artifacts, and give a quality score (1-10, be judgmental).
+For each image, assess fit, readability/artifacts, and give a quality score (1-10, be harsh and very judgmental).
 Output ONLY JSON: {{"image_evaluations": [{{"id":"<id>", "fitness_description":"<txt>", "readability_artifacts":"<txt>", "quality_score":<int>, "overall_feedback":"<txt>"}}]}}
 Images for evaluation: {json.dumps(eval_input_for_gpt, indent=2)}"""
                     print(f"GPT Image Eval Prompt (shortened for log): {eval_prompt[:300]}...")
