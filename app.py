@@ -152,7 +152,7 @@ def create_asset_route():
                 raw_image_link = None # Ensure it's None if git push fails
                 art_style_info = {"error": error_message} # Propagate error to art style step
 
-        elif direct_image_url_input and (direct_image_url_input.startswith("http://") or direct_image_input.startswith("https://")):
+        elif direct_image_url_input and (direct_image_url_input.startswith("http://") or direct_image_url_input.startswith("https://")):
             # --- Use Direct URL Input --- 
             raw_image_link = direct_image_url_input
             sample_image_url = direct_image_url_input # For display purposes, show the URL provided
@@ -252,7 +252,7 @@ Asset Type: {data.get('asset_type', '')}
 IP Description: {data.get('ip_description', '')}
 Research Information:
 {research_info_json_string}
-Focus the 'visual_design' on core distinguishing features or thematic elements.
+Focus the 'visual_design' on core distinguishing features or thematic elements based on 'asset_description'.
 Output ONLY a single JSON object: {{"concept_name": "<Name>", "visual_design": "<Description>"}}"""
             
             print("\n--- GPT: Initial Concept & Visual Design ---")
@@ -535,7 +535,7 @@ Refined Prompt for LeonardoAI:
                     eval_input_for_gpt = [{"id": img_data["id"], "image_url": img_data["url"]} for img_data in generated_batch_urls_ids]
                     
                     eval_prompt_text_part = f"""You are an art director. You will evaluate a batch of generated images.
-For each image, provide a detailed evaluation based on the following criteria.
+For each image, provide a concise evaluation based on the following criteria.
 The images are provided sequentially after this text. Please associate your evaluations with the image IDs listed below.
 
 **Reference Information for Evaluation:**
@@ -560,7 +560,7 @@ The images are provided sequentially after this text. Please associate your eval
 -   **Adherence to Art Style Definition**: How well does the image match ALL aspects of the specified `Art Style Definition`?
 -   **Readability & Composition**: Is the subject clear? Is the composition effective?
 -   **Artifacts & Distortions**: Are there any visual glitches, strange anatomy, or other generation artifacts?
--   **Quality Score**: Assign a quality score from 1 (poor) to 10 (excellent). Be critical and use the full range.
+-   **Quality Score**: Assign a quality score from 1 (poor) to 10 (excellent). Be honest and mega critical, use the full range.
 
 **Output Format**:
 Output ONLY a single JSON object. The JSON should contain a key "image_evaluations", which is a list of objects. Each object in the list corresponds to one of the evaluated images and MUST include its original 'id'.
@@ -688,203 +688,11 @@ Refined Prompt for LeonardoAI:
         if image_generation_global_error and final_selected_image_url == "/static/mock_image.png":
             final_image_evaluation = {"error": image_generation_global_error}
 
-        # --- New Step: Stylize Final Concept Image ---
-        stylized_image_prompt_text_gpt = ""
-        stylized_image_url_leo = "/static/mock_image.png" # Changed placeholder
-        stylized_image_evaluation_gpt = {"error": "Stylization not attempted or failed."}
-        stylized_image_overall_error = None # Specific error for this step
-
-        can_attempt_stylization = (
-            final_selected_image_details_for_stylization and
-            final_selected_image_details_for_stylization.get("url") != "/static/mock_image.png" and
-            final_selected_image_details_for_stylization.get("id") and # Crucial: Leonardo ID must exist
-            isinstance(art_style_info, dict) and "error" not in art_style_info and
-            isinstance(refined_concept_output, dict) and "error" not in refined_concept_output and
-            gpt_client and LEO_API_KEY
-        )
-
-        if can_attempt_stylization:
-            original_leo_image_id = final_selected_image_details_for_stylization.get("id")
-            original_image_width = final_selected_image_details_for_stylization.get("width", 896)
-            original_image_height = final_selected_image_details_for_stylization.get("height", 896)
-
-            print(f"\n--- Attempting Stylization of Concept Image (ID: {original_leo_image_id}) ---")
-
-            # 1. GPT: Create prompt for DALL·E Image Edit API
-            # The original_leo_image_id is the ID from Leonardo. We need its URL for GPT context / DALL·E input.
-            concept_image_url_for_stylization = final_selected_image_details_for_stylization.get("url")
-
-            prompt_for_dalle_edit_text = f"""You are an expert prompt engineer for DALL·E's image editing capabilities.
-Your goal is to create a prompt that will instruct DALL·E to redraw an existing concept image (which will be provided as input to DALL·E) using a specific art style, while preserving the original image's composition, characters, and key details.
-
-**Original Concept Image URL (for your reference, DALL·E will get image data directly):** {concept_image_url_for_stylization}
-Concept Name: {refined_concept_output.get('concept_name', 'N/A')}
-Visual Design: {refined_concept_output.get('visual_design', 'N/A')}
-
-**Target Art Style Definition (to be applied):**
-{json.dumps(art_style_info, indent=2)}
-
-**Task:**
-Generate a concise and effective DALL·E prompt (max 1000 characters). This prompt will be used with DALL·E's image editing function.
-The prompt should instruct DALL·E to:
-1.  Apply ALL aspects of the 'Target Art Style Definition' to the input image.
-2.  Ensure the core subject matter, composition, and essential details (like character poses, main objects, general layout) of the original input image are preserved as much as possible.
-3.  The prompt should focus on describing the desired *style transformation* and reinforcing the style elements. 
-
-Output ONLY the DALL·E prompt string for image editing.
-Prompt for DALL·E Image Edit:
-"""
-            print("\n--- GPT: Generating Prompt for DALL·E Image Edit ---")
-            dalle_edit_prompt_text_gpt = ""
-            try:
-                dalle_prompt_gpt_response = gpt_client.chat.completions.create(
-                    model="gpt-4o",
-                    messages=[{"role": "user", "content": prompt_for_dalle_edit_text}],
-                    max_tokens=250, # DALL-E prompts are shorter
-                    temperature=0.3
-                )
-                dalle_edit_prompt_text_gpt = dalle_prompt_gpt_response.choices[0].message.content.replace("Prompt for DALL·E Image Edit:", "").strip()
-                if not dalle_edit_prompt_text_gpt:
-                    raise ValueError("GPT returned an empty prompt for DALL·E edit.")
-                stylized_image_prompt_text_gpt = dalle_edit_prompt_text_gpt # Store for UI
-                print(f"GPT-generated prompt for DALL·E (length {len(dalle_edit_prompt_text_gpt)}):\n{dalle_edit_prompt_text_gpt}")
-            except Exception as e:
-                stylized_image_overall_error = f"GPT prompt generation for DALL·E edit failed: {e}"
-                print(stylized_image_overall_error)
-
-            # 2. Download original concept image for DALL·E input
-            image_bytes_for_dalle = None
-            if not stylized_image_overall_error and concept_image_url_for_stylization:
-                print(f"Downloading concept image from {concept_image_url_for_stylization} for DALL·E input...")
-                try:
-                    response_img_download = requests.get(concept_image_url_for_stylization, timeout=30)
-                    response_img_download.raise_for_status()
-                    downloaded_image_bytes = response_img_download.content
-                    print("Concept image downloaded successfully.")
-
-                    # Convert downloaded image to PNG in memory
-                    print("Converting downloaded image to PNG format for DALL·E...")
-                    try:
-                        img = Image.open(BytesIO(downloaded_image_bytes))
-                        # Ensure image is in RGB or RGBA mode before saving as PNG
-                        if img.mode not in ('RGB', 'RGBA'):
-                            img = img.convert('RGBA') # Convert to RGBA to handle transparency
-                        
-                        png_buffer = BytesIO()
-                        img.save(png_buffer, format="PNG")
-                        image_bytes_for_dalle = png_buffer.getvalue()
-                        png_buffer.close()
-                        print("Image successfully converted to PNG format.")
-                    except Exception as e_convert:
-                        stylized_image_overall_error = f"Failed to convert image to PNG for DALL·E: {e_convert}"
-                        print(stylized_image_overall_error)
-
-                except Exception as e_download: # Renamed to avoid conflict with e_convert
-                    stylized_image_overall_error = f"Failed to download concept image for DALL·E: {e_download}"
-                    print(stylized_image_overall_error)
-            
-            # 3. DALL·E: Generate stylized image using Image Edit API (if prompt and image bytes are ready)
-            if not stylized_image_overall_error and dalle_edit_prompt_text_gpt and image_bytes_for_dalle:
-                print(f"\n--- DALL·E: Generating Stylized Image via Edit API ---")
-                try:
-                    # Determine a DALL·E supported size, e.g., 1024x1024
-                    # We could try to match original aspect ratio if DALL-E versions support non-square edit outputs well
-                    # For DALL-E 2 edit, size must be one of "256x256", "512x512", or "1024x1024"
-                    # DALL-E 3 via API might have different constraints or behaviors with gpt-4o driving it.
-                    # Let's assume gpt_client.images.edit refers to DALL-E 2 unless API changes noted.
-                    target_dalle_size = "1024x1024" 
-                    print(f"Requesting DALL·E image edit with size: {target_dalle_size}")
-
-                    response_dalle_edit = gpt_client.images.edit(
-                        image=image_bytes_for_dalle,
-                        prompt=dalle_edit_prompt_text_gpt,
-                        n=1,
-                        size=target_dalle_size # e.g., "1024x1024"
-                    )
-                    if response_dalle_edit.data and response_dalle_edit.data[0].url:
-                        stylized_image_url_leo = response_dalle_edit.data[0].url # Reusing variable for UI
-                        print(f"DALL·E stylized image generated: {stylized_image_url_leo}")
-                    else:
-                        stylized_image_overall_error = "DALL·E edit API call succeeded but no image URL found in response."
-                        print(stylized_image_overall_error)
-                        print(f"Full DALL·E response: {response_dalle_edit}")
-
-                except Exception as e:
-                    stylized_image_overall_error = f"DALL·E image edit API call failed: {e}"
-                    print(stylized_image_overall_error)
-            elif not stylized_image_overall_error: # Catch if we didn't proceed to DALL-E due to earlier failure
-                 if not dalle_edit_prompt_text_gpt:
-                    stylized_image_overall_error = stylized_image_overall_error or "Skipping DALL·E: Prompt not generated."
-                 elif not image_bytes_for_dalle:
-                    stylized_image_overall_error = stylized_image_overall_error or "Skipping DALL·E: Original image not downloaded."
-                 print(stylized_image_overall_error if stylized_image_overall_error else "Skipping DALL-E for unknown reason before API call.")
-            
-            # 4. GPT Evaluation of DALL·E stylized image (replaces old Leo eval spot)
-            if stylized_image_url_leo and stylized_image_url_leo != "/static/mock_image.png" and not stylized_image_overall_error:
-                eval_prompt_stylized_text = f"""You are an art director evaluating a stylized image generated by DALL·E.
-The image at [Stylized Image URL] was generated by taking an original concept and attempting to redraw it in a specific 'Target Art Style'.
-
-**Original Concept Details (for context on subject/composition):**
-{json.dumps(refined_concept_output, indent=2)}
-
-**Target Art Style (that should have been applied):**
-{json.dumps(art_style_info, indent=2)}
-
-**Evaluate the Stylized Image based on these criteria:**
-1.  **Adherence to Target Art Style**: How well does the image match ALL aspects of the 'Target Art Style Definition' (e.g., style.description, linework, color_palette, visual_density)? Be specific. Score 1-10.
-2.  **Preservation of Original Concept**: How well does the image retain the core subject matter, composition, character poses, and essential details of the 'Original Concept'? Score 1-10.
-3.  **Overall Quality & Artifacts**: Note clarity, composition effectiveness (considering the style), and any visual glitches or distortions. Score 1-10.
-
-Output ONLY a single JSON object in the following format:
-{{
-  "stylized_image_evaluation": {{
-    "adherence_to_style_score": <integer_score_1_to_10>,
-    "adherence_to_style_comments": "<detailed_text_assessment>",
-    "preservation_of_concept_score": <integer_score_1_to_10>,
-    "preservation_of_concept_comments": "<detailed_text_assessment>",
-    "overall_quality_score": <integer_score_1_to_10>,
-    "overall_quality_comments": "<detailed_text_assessment_including_artifacts>"
-  }}
-}}
-"""
-                print("\n--- GPT: Evaluating Stylized Image ---")
-                try:
-                    eval_stylized_response = gpt_client.chat.completions.create(
-                        model="gpt-4o", 
-                        messages=[{"role": "user", "content": [{"type": "text", "text": eval_prompt_stylized_text}, {"type": "image_url", "image_url": {"url": stylized_image_url_leo, "detail": "high"}}]}],
-                        response_format={"type": "json_object"}, 
-                        max_tokens=1500 
-                    )
-                    stylized_image_evaluation_gpt = json.loads(eval_stylized_response.choices[0].message.content)
-                    print("Stylized image evaluation successful.")
-                except Exception as e:
-                    error_msg = f"GPT evaluation of stylized image failed: {e}"
-                    stylized_image_evaluation_gpt = {"error": error_msg}
-                    print(error_msg)
-            elif not stylized_image_overall_error: # If stylize URL is still mock, but no specific error from DALL·E
-                stylized_image_overall_error = stylized_image_overall_error or "Stylization process completed but no valid stylized image URL was obtained. Skipping evaluation."
-                stylized_image_evaluation_gpt = {"error": stylized_image_overall_error}
-                print(stylized_image_overall_error)
-
-
-        else: # Not can_attempt_stylization
-            if not (final_selected_image_details_for_stylization and final_selected_image_details_for_stylization.get("url") != "/static/mock_image.png"):
-                stylized_image_overall_error = "Stylization skipped: No valid final concept image was selected or its details are missing."
-            elif not (final_selected_image_details_for_stylization and final_selected_image_details_for_stylization.get("id")):
-                stylized_image_overall_error = "Stylization skipped: Leonardo ID of the final concept image is missing. Required for image-to-image."
-            elif not (isinstance(art_style_info, dict) and "error" not in art_style_info):
-                stylized_image_overall_error = "Stylization skipped: Art style information is missing or invalid."
-            elif not (isinstance(refined_concept_output, dict) and "error" not in refined_concept_output):
-                stylized_image_overall_error = "Stylization skipped: Refined concept information is missing or invalid."
-            elif not gpt_client:
-                stylized_image_overall_error = "Stylization skipped: GPT client not initialized."
-            elif not LEO_API_KEY:
-                stylized_image_overall_error = "Stylization skipped: LeonardoAI API key not configured."
-            else: # Should not be reached if can_attempt_stylization logic is complete
-                stylized_image_overall_error = "Stylization skipped: Prerequisites not met for an unknown reason."
-            print(f"Stylization not attempted: {stylized_image_overall_error}")
-            stylized_image_evaluation_gpt = {"error": stylized_image_overall_error}
-
+        # Initialize with placeholder if no image generation happened or all failed
+        if final_selected_image_url == "/static/mock_image.png" and image_generation_global_error:
+             final_image_evaluation = {"error": image_generation_global_error}
+        elif final_selected_image_url == "/static/mock_image.png" and not all_generated_images_data:
+             final_image_evaluation = {"error": "Image generation did not produce any images."}
 
         response_data = {
             "research_info_grok_ip": ip_trends_data,
@@ -897,15 +705,17 @@ Output ONLY a single JSON object in the following format:
             "raw_github_image_link": raw_image_link,
             "all_generated_images_details": all_generated_images_data, # For UI to display all attempts
             "final_selected_image_url": final_selected_image_url,
-            "final_image_evaluation": final_image_evaluation,
+            "final_concept_evaluation": final_image_evaluation,
             "image_generation_overall_error": image_generation_global_error if final_selected_image_url == "/static/mock_image.png" else None,
-            # New data for stylized image
-            "stylized_image_prompt_text_gpt": stylized_image_prompt_text_gpt,
-            "stylized_image_url_leo": stylized_image_url_leo,
-            "stylized_image_evaluation_gpt": stylized_image_evaluation_gpt,
-            "stylized_image_overall_error": stylized_image_overall_error
         }
         
+        # If there was a global error during image generation stages that prevented a final image
+        if image_generation_global_error and final_selected_image_url == "/static/mock_image.png":
+            response_data["final_concept_evaluation"] = {"error": image_generation_global_error}
+            # Ensure other image related fields also reflect error or placeholder state
+            # response_data["stylized_concept_image_url"] = "/static/mock_image.png" # REMOVED
+            # response_data["stylized_concept_evaluation"] = {"error": "Stylization skipped due to prior image generation failure."} # REMOVED
+
         return jsonify(response_data)
 
 if __name__ == '__main__':

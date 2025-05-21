@@ -170,6 +170,7 @@
             </div>
 
             <!-- New Section for Stylized Image -->
+            <!-- STYLIZATION UI REMOVED AS PER USER REQUEST
             <div class="output-section" id="stylizedImageSection" style="display: none; margin-top: 30px;">
                 <h3>Stylized Version (Based on Reference Art Style)</h3>
                 <div id="stylizedImageErrorSection" style="display:none; margin-bottom: 15px;">
@@ -194,6 +195,7 @@
                     <pre id="stylizedImageEvaluationOutput">Awaiting evaluation...</pre>
                 </div>
             </div>
+            -->
 
         </div>
     </div>
@@ -264,15 +266,15 @@
             document.getElementById('finalSelectedImageLink').textContent = "Awaiting selection...";
 
             // Clear stylized image section
-            document.getElementById('stylizedImageSection').style.display = 'none';
-            document.getElementById('stylizedImageErrorSection').style.display = 'none';
-            document.getElementById('stylizedImageErrorOutput').textContent = '';
-            document.getElementById('originalForStylizationPreview').src = '/static/mock_image.png';
-            document.getElementById('stylizedImageLink').href = "#";
-            document.getElementById('stylizedImageLink').textContent = "Awaiting generation...";
-            document.getElementById('stylizedImagePreview').src = '/static/mock_image.png';
-            document.getElementById('stylizedImagePromptOutput').textContent = 'Awaiting prompt...';
-            document.getElementById('stylizedImageEvaluationOutput').textContent = 'Awaiting evaluation...';
+            // document.getElementById('stylizedImageSection').style.display = 'none';
+            // document.getElementById('stylizedImageErrorSection').style.display = 'none';
+            // document.getElementById('stylizedImageErrorOutput').textContent = '';
+            // document.getElementById('originalForStylizationPreview').src = '/static/mock_image.png';
+            // document.getElementById('stylizedImageLink').href = "#";
+            // document.getElementById('stylizedImageLink').textContent = "Awaiting generation...";
+            // document.getElementById('stylizedImagePreview').src = '/static/mock_image.png';
+            // document.getElementById('stylizedImagePromptOutput').textContent = 'Awaiting prompt...';
+            // document.getElementById('stylizedImageEvaluationOutput').textContent = 'Awaiting evaluation...';
 
             startLoadingAnimation();
             createButton.disabled = true;
@@ -425,53 +427,6 @@
                 }
                 displayJSON('finalImageEvaluationOutput', results.final_image_evaluation);
 
-                // --- Display Stylized Image Section ---
-                const stylizedSection = document.getElementById('stylizedImageSection');
-                const stylizedErrorSection = document.getElementById('stylizedImageErrorSection');
-                const stylizedErrorOutput = document.getElementById('stylizedImageErrorOutput');
-
-                if (results.stylized_image_overall_error) {
-                    stylizedErrorOutput.textContent = results.stylized_image_overall_error;
-                    stylizedErrorSection.style.display = 'block';
-                } else {
-                    stylizedErrorSection.style.display = 'none';
-                }
-
-                if (results.final_selected_image_url && results.final_selected_image_url !== "/static/mock_image.png") {
-                    document.getElementById('originalForStylizationPreview').src = results.final_selected_image_url;
-                } else {
-                    document.getElementById('originalForStylizationPreview').src = '/static/mock_image.png'; 
-                }
-
-                if (results.stylized_image_url_leo && results.stylized_image_url_leo !== "/static/mock_image.png") {
-                    document.getElementById('stylizedImagePreview').src = results.stylized_image_url_leo;
-                    const stylizedLink = document.getElementById('stylizedImageLink');
-                    stylizedLink.href = results.stylized_image_url_leo;
-                    stylizedLink.textContent = results.stylized_image_url_leo;
-                    stylizedSection.style.display = 'block'; 
-                } else if (results.stylized_image_overall_error) {
-                    // If there's an error, we might still want to show the section with the error message.
-                    // If final_selected_image_url is valid, it means stylization was attempted.
-                    if (results.final_selected_image_url && results.final_selected_image_url !== "/static/mock_image.png"){
-                        stylizedSection.style.display = 'block'; 
-                    }
-                    document.getElementById('stylizedImagePreview').src = '/static/mock_image.png';
-                    const stylizedLink = document.getElementById('stylizedImageLink');
-                    stylizedLink.href = "#";
-                    stylizedLink.textContent = "Stylization failed or not attempted.";
-                } else {
-                    // Default: keep stylized section hidden if no error and no stylized image URL and no valid original to even attempt stylization
-                     if (results.final_selected_image_url && results.final_selected_image_url !== "/static/mock_image.png"){
-                        stylizedSection.style.display = 'block'; // Show section if original was there, but stylization step just didn't run
-                        document.getElementById('stylizedImageLink').textContent = "Stylization not run or no image produced.";
-                     } else {
-                        stylizedSection.style.display = 'none'; 
-                     }
-                }
-
-                displayJSON('stylizedImagePromptOutput', results.stylized_image_prompt_text_gpt || "Prompt not generated.");
-                displayJSON('stylizedImageEvaluationOutput', results.stylized_image_evaluation_gpt);
-                // --- End Display Stylized Image Section ---
 
             } catch (error) {
                 console.error('Error fetching or processing results:', error);
