@@ -170,7 +170,7 @@ def create_asset_route():
     "style": {{"description": "", "scale":"realistic/cartoony/exaggerated"}},
     "linework":{{"outline": true/false, "thickness": "very thin/medium/bold", "style": "clean and consistent/rough and abrupt", "color": "darker shade of fill tone to preserve cohesion"}},
     "color_palette": {{"type": "vivid rgb/neon/realistic/narrow palette/gritty/minimalist", "saturation": "saturated/grayscale/pastelle", "accents":"yes/no", "main colours":[]}},
-    "visual_density": {{"level": "low/mid/high/etremly detailed"}},
+    "visual_density": {{"level": "low/mid/high/etremly detailed", "background": "solid color/minimalist/detailed"}},
     "additional notes": "describe the style in a concise manner professional specification style"
 }}
 """ # Ensure this prompt is exactly as you need it.
@@ -531,28 +531,66 @@ Refined Prompt for LeonardoAI:
                 if gpt_client and generated_batch_urls_ids: # Only evaluate if we have images
                     print(f"\n--- Evaluating {len(generated_batch_urls_ids)} Images from LeonardoAI Attempt {attempt + 1} with GPT ---")
                     eval_input_for_gpt = [{"id": img_data["id"], "image_url": img_data["url"]} for img_data in generated_batch_urls_ids]
-                    # Using mock URLs, GPT can't actually see images here. A real URL would be needed.
-                    eval_prompt = f"""You are an art director. Evaluate images based on:
-Refined Concept: {json.dumps(refined_concept_output, indent=2)}
-Art Style: {json.dumps(art_style_info, indent=2)}
-Prompt: {current_image_prompt_text}
-For each image, assess fit, readability/artifacts, and give a quality score (1-10, be harsh and very judgmental).
-Output ONLY JSON: {{"image_evaluations": [{{"id":"<id>", "fitness_description":"<txt>", "readability_artifacts":"<txt>", "quality_score":<int>, "overall_feedback":"<txt>"}}]}}
-Images for evaluation: {json.dumps(eval_input_for_gpt, indent=2)}"""
-                    print(f"GPT Image Eval Prompt (shortened for log): {eval_prompt[:300]}...")
                     
+                    eval_prompt_text_part = f"""You are an art director. You will evaluate a batch of generated images.
+For each image, provide a detailed evaluation based on the following criteria.
+The images are provided sequentially after this text. Please associate your evaluations with the image IDs listed below.
+
+**Reference Information for Evaluation:**
+
+1.  **Refined Concept**:
+    ```json
+    {json.dumps(refined_concept_output, indent=2)}
+    ```
+    Assess how well the image embodies the `concept_name` and `visual_design` described in this Refined Concept.
+
+2.  **Art Style Definition**:
+    ```json
+    {json.dumps(art_style_info, indent=2)}
+    ```
+    Assess how well the image adheres to ALL aspects of this Art Style Definition (e.g., style.description, style.scale, linework, color_palette, visual_density). Be specific.
+
+3.  **Prompt Used for Generation (for context only)**:
+    `{current_image_prompt_text}`
+
+**Evaluation Criteria per Image**:
+-   **Fitness to Refined Concept**: How well does the image embody the `concept_name` and `visual_design` from the Refined Concept?
+-   **Adherence to Art Style Definition**: How well does the image match ALL aspects of the specified `Art Style Definition`?
+-   **Readability & Composition**: Is the subject clear? Is the composition effective?
+-   **Artifacts & Distortions**: Are there any visual glitches, strange anatomy, or other generation artifacts?
+-   **Quality Score**: Assign a quality score from 1 (poor) to 10 (excellent). Be critical and use the full range.
+
+**Output Format**:
+Output ONLY a single JSON object. The JSON should contain a key "image_evaluations", which is a list of objects. Each object in the list corresponds to one of the evaluated images and MUST include its original 'id'.
+The structure for each image evaluation object is:
+`{{`
+  `"id": "<image_id_from_input_list>",`
+  `"fitness_to_concept_evaluation": "<Detailed text assessing how well the image fits the Refined Concept.>",`
+  `"adherence_to_art_style_evaluation": "<Detailed text assessing how well the image adheres to ALL aspects of the Art Style Definition.>",`
+  `"readability_and_artifacts_evaluation": "<Detailed text on image clarity, composition, and any visual artifacts or distortions.>",`
+  `"quality_score": <Integer score from 1 (poor) to 10 (excellent).>,`
+  `"overall_feedback": "<Concise summary and actionable suggestions for improving the image or the prompt if generation were to be re-attempted.>"`
+`}}`
+
+**List of Image IDs for reference (match with provided images):**
+{json.dumps([item['id'] for item in eval_input_for_gpt], indent=2)}
+"""
+                    # print(f"GPT Image Eval Prompt Text (summary): {eval_prompt_text_part[:500]}...") # Can be very verbose
+                    print(f"GPT Image Eval: Evaluating {len(eval_input_for_gpt)} image(s). Refined Concept: '{refined_concept_output.get('concept_name', 'N/A')}'")
+
                     try:
-                        # For real image URLs, content would be:
-                        # content_parts = [{"type": "text", "text": eval_prompt_text_part}] 
-                        # for item in eval_input_for_gpt: content_parts.append({"type":"image_url", "image_url":{"url": item["image_url"]}})
-                        # messages=[{"role": "user", "content": content_parts}]
-                        # Since URLs are local/mock, GPT won't see them.
+                        content_parts = [{"type": "text", "text": eval_prompt_text_part}]
+                        for item in eval_input_for_gpt: # eval_input_for_gpt has {"id": ..., "url": ...}
+                            content_parts.append({
+                                "type": "image_url",
+                                "image_url": {"url": item["image_url"], "detail": "high"} 
+                            })
                         
                         eval_response = gpt_client.chat.completions.create(
                             model="gpt-4o", 
-                            messages=[{"role": "user", "content": eval_prompt}], # Text-only due to mock URLs
+                            messages=[{"role": "user", "content": content_parts}],
                             response_format={"type": "json_object"}, 
-                            max_tokens=2000
+                            max_tokens=2500 # Increased max_tokens slightly for potentially more verbose JSON output
                         )
                         eval_data_list = json.loads(eval_response.choices[0].message.content).get("image_evaluations", [])
                         
