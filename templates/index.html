@@ -169,6 +169,32 @@
                 <pre id="finalImageEvaluationOutput">Awaiting evaluation...</pre>
             </div>
 
+            <!-- New Section for Stylized Image -->
+            <div class="output-section" id="stylizedImageSection" style="display: none; margin-top: 30px;">
+                <h3>Stylized Version (Based on Reference Art Style)</h3>
+                <div id="stylizedImageErrorSection" style="display:none; margin-bottom: 15px;">
+                    <h4>Stylization Process Status</h4>
+                    <pre id="stylizedImageErrorOutput" class="error-message"></pre>
+                </div>
+                <div style="display: flex; flex-wrap: wrap; gap: 20px;">
+                    <div style="flex: 1; min-width: 300px;">
+                        <h4>Original Concept Image</h4>
+                        <img id="originalForStylizationPreview" src="/static/mock_image.png" alt="Original Concept for Stylization" class="final-image" style="max-width: 100%; height: auto;">
+                    </div>
+                    <div style="flex: 1; min-width: 300px;">
+                        <h4>Stylized Image Result</h4>
+                        <p><strong>Image URL:</strong> <a id="stylizedImageLink" href="#" target="_blank">Awaiting generation...</a></p>
+                        <img id="stylizedImagePreview" src="/static/mock_image.png" alt="Stylized Image" class="final-image" style="max-width: 100%; height: auto;">
+                    </div>
+                </div>
+                <div style="margin-top: 15px;">
+                    <h4>Prompt Used for Stylization:</h4>
+                    <pre id="stylizedImagePromptOutput">Awaiting prompt...</pre>
+                    <h4>Evaluation of Stylized Image:</h4>
+                    <pre id="stylizedImageEvaluationOutput">Awaiting evaluation...</pre>
+                </div>
+            </div>
+
         </div>
     </div>
 
@@ -237,6 +263,16 @@
             document.getElementById('finalSelectedImageLink').href = "#";
             document.getElementById('finalSelectedImageLink').textContent = "Awaiting selection...";
 
+            // Clear stylized image section
+            document.getElementById('stylizedImageSection').style.display = 'none';
+            document.getElementById('stylizedImageErrorSection').style.display = 'none';
+            document.getElementById('stylizedImageErrorOutput').textContent = '';
+            document.getElementById('originalForStylizationPreview').src = '/static/mock_image.png';
+            document.getElementById('stylizedImageLink').href = "#";
+            document.getElementById('stylizedImageLink').textContent = "Awaiting generation...";
+            document.getElementById('stylizedImagePreview').src = '/static/mock_image.png';
+            document.getElementById('stylizedImagePromptOutput').textContent = 'Awaiting prompt...';
+            document.getElementById('stylizedImageEvaluationOutput').textContent = 'Awaiting evaluation...';
 
             startLoadingAnimation();
             createButton.disabled = true;
@@ -389,6 +425,53 @@
                 }
                 displayJSON('finalImageEvaluationOutput', results.final_image_evaluation);
 
+                // --- Display Stylized Image Section ---
+                const stylizedSection = document.getElementById('stylizedImageSection');
+                const stylizedErrorSection = document.getElementById('stylizedImageErrorSection');
+                const stylizedErrorOutput = document.getElementById('stylizedImageErrorOutput');
+
+                if (results.stylized_image_overall_error) {
+                    stylizedErrorOutput.textContent = results.stylized_image_overall_error;
+                    stylizedErrorSection.style.display = 'block';
+                } else {
+                    stylizedErrorSection.style.display = 'none';
+                }
+
+                if (results.final_selected_image_url && results.final_selected_image_url !== "/static/mock_image.png") {
+                    document.getElementById('originalForStylizationPreview').src = results.final_selected_image_url;
+                } else {
+                    document.getElementById('originalForStylizationPreview').src = '/static/mock_image.png'; 
+                }
+
+                if (results.stylized_image_url_leo && results.stylized_image_url_leo !== "/static/mock_image.png") {
+                    document.getElementById('stylizedImagePreview').src = results.stylized_image_url_leo;
+                    const stylizedLink = document.getElementById('stylizedImageLink');
+                    stylizedLink.href = results.stylized_image_url_leo;
+                    stylizedLink.textContent = results.stylized_image_url_leo;
+                    stylizedSection.style.display = 'block'; 
+                } else if (results.stylized_image_overall_error) {
+                    // If there's an error, we might still want to show the section with the error message.
+                    // If final_selected_image_url is valid, it means stylization was attempted.
+                    if (results.final_selected_image_url && results.final_selected_image_url !== "/static/mock_image.png"){
+                        stylizedSection.style.display = 'block'; 
+                    }
+                    document.getElementById('stylizedImagePreview').src = '/static/mock_image.png';
+                    const stylizedLink = document.getElementById('stylizedImageLink');
+                    stylizedLink.href = "#";
+                    stylizedLink.textContent = "Stylization failed or not attempted.";
+                } else {
+                    // Default: keep stylized section hidden if no error and no stylized image URL and no valid original to even attempt stylization
+                     if (results.final_selected_image_url && results.final_selected_image_url !== "/static/mock_image.png"){
+                        stylizedSection.style.display = 'block'; // Show section if original was there, but stylization step just didn't run
+                        document.getElementById('stylizedImageLink').textContent = "Stylization not run or no image produced.";
+                     } else {
+                        stylizedSection.style.display = 'none'; 
+                     }
+                }
+
+                displayJSON('stylizedImagePromptOutput', results.stylized_image_prompt_text_gpt || "Prompt not generated.");
+                displayJSON('stylizedImageEvaluationOutput', results.stylized_image_evaluation_gpt);
+                // --- End Display Stylized Image Section ---
 
             } catch (error) {
                 console.error('Error fetching or processing results:', error);
@@ -403,7 +486,7 @@
         document.getElementById('populateTestDataButton').addEventListener('click', function() {
             document.getElementById('ip_name').value = 'Goblin Kitchen';
             document.getElementById('ip_description').value = 'fast-paced restaurant management game where players run a chaotic goblin kitchen serving outlandish dishes to fantastical creatures.';
-            document.getElementById('target_audience').value = 'Players who enjoy simulation, cooking games, and humorous fantasy settings (e.g., Overcooked, Stardew Valley, Theme Hospital). Age 12+.';
+            document.getElementById('target_audience').value = 'Players who enjoy simulation, cooking games, and humorous fantasy settings (e.g., Overcooked, Stardew Valley, Theme Hospital). Age 18+.';
             document.getElementById('asset_type').value = 'character_concept';
             document.getElementById('entity').value = 'friendly_npc';
             document.getElementById('asset_description_input').value = 'a restaurant customer';
