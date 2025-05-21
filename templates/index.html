@@ -9,7 +9,7 @@
         .container { background-color: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
         h2, h3 { color: #555; border-bottom: 1px solid #eee; padding-bottom: 5px; margin-top: 30px;}
         label { display: block; margin-top: 10px; font-weight: bold; }
-        input[type='text'], input[type='file'], select, textarea {
+        input[type='text'], input[type='file'], input[type='url'], select, textarea {
             width: calc(100% - 22px);
             padding: 10px;
             margin-top: 5px;
@@ -26,20 +26,25 @@
         textarea { min-height: 100px; }
         .output-section { margin-top: 20px; padding: 15px; background-color: #e9ecef; border-radius: 4px; }
         .output-section h4 { margin-top: 0; color: #007bff; }
-        pre { background-color: #333; color: #fff; padding: 10px; border-radius: 4px; white-space: pre-wrap; word-wrap: break-word; }
-        #loadingMessage { display: none; color: #007bff; font-weight: bold; margin-top: 15px; }
-        img#generatedImage { max-width: 100%; margin-top: 10px; border: 1px solid #ddd; border-radius: 4px; }
+        pre { background-color: #333; color: #fff; padding: 10px; border-radius: 4px; white-space: pre-wrap; word-wrap: break-word; font-size: 0.9em; }
+        #loadingMessageContainer { display: none; color: #007bff; font-weight: bold; margin-top: 15px; }
+        img.generated-image, img.final-image { max-width: 100%; margin-top: 10px; border: 1px solid #ddd; border-radius: 4px; }
+        .image-gallery { display: flex; flex-wrap: wrap; gap: 20px; margin-top: 10px; }
+        .image-gallery-item { border: 1px solid #ccc; padding: 10px; border-radius: 4px; background-color: #f9f9f9; width: calc(33.333% - 20px); box-sizing: border-box;}
+        .image-gallery-item img { max-width: 100%; height: auto; border-radius: 4px; }
+        .image-gallery-item h5 { margin-top: 0; color: #337ab7; }
+        .image-gallery-item p { font-size: 0.9em; margin-bottom: 5px;}
+        .error-message { color: red; font-weight: bold; }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>Automated Art Generator - theMid</h1>
+        <h1>Automated Art Generator - theMid 1.1</h1>
 
         <form id="assetForm">
             <h2>Settings</h2>
             <p>
-                <em>API keys and Git credentials should be set in your <code>.env</code> file.</em><br>
-                GPT_API_KEY, XAI_API_KEY (for Grok), GIT_USERNAME, GIT_TOKEN.
+                <em>API keys (GPT, XAI, LeonardoAI) and Git credentials (GIT_USERNAME, GIT_TOKEN, GIT_REPO_URL) should be set in your <code>.env</code> file.</em>
             </p>
             
             <h2>Game Info</h2>
@@ -59,25 +64,37 @@
                 <option value="character_portrait">Character Portrait</option>
                 <option value="game_item">Game Item</option>
                 <option value="building">Building</option>
+                <option value="prop_object">Prop Object</option>
+                <option value="environment_concept">Environment Concept</option>
             </select>
 
             <label for="entity">Entity:</label>
             <select id="entity" name="entity">
                 <option value="player">Player</option>
                 <option value="friendly_npc">Friendly NPC</option>
-                <option value="enemy">Enemy</option>
+                <option value="enemy_npc">Enemy NPC</option>
+                <option value="neutral_character">Neutral Character</option>
+                <option value="boss">Boss</option>
+                <option value="item_collectible">Item/Collectible</option>
+                <option value="interactive_object">Interactive Object</option>
+                <option value="background_element">Background Element</option>
             </select>
 
-            <label for="asset_description_input">Asset Description:</label>
+            <label for="asset_description_input">Asset Description (Theme/Core Idea):</label>
             <input type="text" id="asset_description_input" name="asset_description" required>
 
-            <label for="event_name">Event Name (e.g., Halloween, Christmas):</label>
+            <label for="event_name">Event Name (Optional, e.g., Halloween, Summer Festival):</label>
             <input type="text" id="event_name" name="event_name">
 
             <h2>Art Reference</h2>
-            <label for="sample_image">Sample Image:</label>
-            <input type="file" id="sample_image" name="sample_image" accept="image/*">
-            <p><em>Image will be copied, pushed to Git, and a raw link used (simulated for now).</em></p>
+            <div class="form-group">
+                <label for="sample_image">Sample Art Reference Image (Upload - Optional):</label>
+                <input type="file" id="sample_image" name="sample_image" class="form-control-file" accept="image/*">
+            </div>
+            <div class="form-group">
+                <label for="sample_image_url_input">Or Paste Image URL (Optional):</label>
+                <input type="url" id="sample_image_url_input" name="sample_image_url_input" class="form-control" placeholder="https://example.com/image.jpg">
+            </div>
 
             <button type="button" id="createAssetButton">Create an Asset</button>
             <button type="button" id="populateTestDataButton" style="background-color: #5cb85c; margin-left: 10px;">Populate Test Data</button>
@@ -91,59 +108,67 @@
         </div>
 
         <div id="resultsSection" style="display: none;">
-            <h2>Brainstorm and Research Outputs</h2>
+            <h2>Workflow Outputs</h2>
             
             <div class="output-section">
-                <h4>Grok - IP Trends</h4>
-                <pre id="grokIpTrendsOutput"></pre>
+                <h4>Uploaded Sample Image Details</h4>
+                <p><strong>Local Preview Path:</strong> <a id="uploadedSampleImageLink" href="#" target="_blank">N/A</a></p>
+                <img id="uploadedSampleImagePreview" src="" alt="Uploaded Sample Image Preview" style="max-width: 200px; max-height: 200px; display: none; border: 1px solid #ddd; margin-top:5px;">
+                <p style="margin-top:10px;"><strong>Raw GitHub Link (if uploaded & pushed):</strong> <a id="rawGithubImageLink" href="#" target="_blank">N/A</a></p>
             </div>
 
             <div class="output-section">
-                <h4>Grok - Event Trends</h4>
-                <pre id="grokEventTrendsOutput"></pre>
+                <h4>GPT - Art Style Analysis (from Sample Image)</h4>
+                <pre id="gptArtStyleOutput">Awaiting results...</pre>
             </div>
 
             <div class="output-section">
-                <h4>GPT - Art Style Description</h4>
-                <pre id="gptArtStyleOutput"></pre>
+                <h4>XAI/Grok - IP Trends Research</h4>
+                <pre id="grokIpTrendsOutput">Awaiting results...</pre>
             </div>
 
             <div class="output-section">
-                <h4>GPT - Initial Concept & Visual Design</h4>
-                <pre id="gptInitialConceptOutput"></pre>
+                <h4>XAI/Grok - Event Trends Research</h4>
+                <pre id="grokEventTrendsOutput">Awaiting results...</pre>
+            </div>
+            
+            <h3>Concept Generation & Refinement</h3>
+            <div class="output-section">
+                <h4>GPT - Step 1: Initial Concept & Visual Design</h4>
+                <pre id="gptInitialConceptOutput">Awaiting results...</pre>
+            </div>
+
+            <div class="output-section">
+                <h4>GPT - Step 2: Feedback on Initial Concept</h4>
+                <pre id="gptConceptFeedbackOutput">Awaiting results...</pre>
+            </div>
+
+            <div class="output-section">
+                <h4>GPT - Step 3: Refined Concept (Based on Feedback)</h4>
+                <pre id="gptRefinedConceptOutput">Awaiting results...</pre>
+            </div>
+
+            <h3>LeonardoAI - Image Generation</h3>
+            <div class="output-section" id="imageGenerationOverallErrorSection" style="display:none;">
+                <h4>Image Generation Overall Status</h4>
+                <pre id="imageGenerationOverallErrorOutput" class="error-message"></pre>
             </div>
             
             <div class="output-section">
-                <h4>GPT - Progression Brainstorm</h4>
-                <pre id="gptBrainstormOutput"></pre>
+                <h4>All Generated Images & Evaluations (LeonardoAI)</h4>
+                <div id="imageGalleryContainer" class="image-gallery">
+                    <p id="noImagesGeneratedText">No images were generated or retrieved.</p>
+                </div>
             </div>
 
             <div class="output-section">
-                <h4>GPT - Feedback on Brainstorm</h4>
-                <pre id="gptFeedbackOutput"></pre>
+                <h4>Final Selected Image</h4>
+                <p><strong>Image URL:</strong> <a id="finalSelectedImageLink" href="#" target="_blank">Awaiting selection...</a></p>
+                <img id="finalSelectedImagePreview" src="/static/mock_image.png" alt="Final Selected Image" class="final-image" style="max-width: 512px; height: auto;">
+                <h4>Evaluation of Final Image:</h4>
+                <pre id="finalImageEvaluationOutput">Awaiting evaluation...</pre>
             </div>
 
-            <div class="output-section">
-                <h4>GPT - Final Result (Iterated Brainstorm)</h4>
-                <pre id="final-result-gpt-output">Awaiting results...</pre>
-            </div>
-
-            <div class="output-section">
-                <h4>Generated Asset Image</h4>
-                <p>Image generation status: <span id="image-generation-status">Awaiting generation...</span></p>
-                <img id="generated-asset-image" src="/static/mock_image.png" alt="Generated Asset Image" style="max-width: 100%; height: auto;">
-            </div>
-
-            <h2>Art Reference & Asset Creation Output</h2>
-            <div class="output-section">
-                <h4>Uploaded Sample Image (Local Path)</h4>
-                <p><a id="uploadedSampleImageLink" href="#" target="_blank"></a></p>
-                <img id="uploadedSampleImagePreview" src="" alt="Uploaded Sample Image" style="max-width: 200px; max-height: 200px; display: none;">
-            </div>
-            <div class="output-section">
-                <h4>Uploaded Sample Image (Raw GitHub Link)</h4>
-                <p><a id="rawGithubImageLink" href="#" target="_blank"></a></p>
-            </div>
         </div>
     </div>
 
@@ -155,12 +180,14 @@
         function startLoadingAnimation() {
             const loadingMessageContainer = document.getElementById('loadingMessageContainer');
             const loadingSpinner = document.getElementById('loadingSpinner');
+            const loadingText = document.getElementById('loadingText');
+            loadingText.textContent = 'Generation in progress... Please wait, this can take a few minutes.';
             loadingMessageContainer.style.display = 'block';
             if (loadingInterval) clearInterval(loadingInterval);
             loadingInterval = setInterval(() => {
                 spinnerIndex = (spinnerIndex + 1) % spinnerChars.length;
                 loadingSpinner.textContent = spinnerChars[spinnerIndex];
-            }, 200); // Adjust speed here (milliseconds)
+            }, 200);
         }
 
         function stopLoadingAnimation() {
@@ -170,21 +197,56 @@
             loadingMessageContainer.style.display = 'none';
         }
 
+        function displayJSON(elementId, data) {
+            const element = document.getElementById(elementId);
+            if (typeof data === 'object' && data !== null) {
+                element.textContent = JSON.stringify(data, null, 2);
+                if (data.error) {
+                    element.classList.add('error-message');
+                } else {
+                    element.classList.remove('error-message');
+                }
+            } else if (data) {
+                element.textContent = data;
+                 element.classList.remove('error-message');
+            } else {
+                element.textContent = 'No data received or data is empty.';
+            }
+        }
+
         document.getElementById('createAssetButton').addEventListener('click', async function() {
             const form = document.getElementById('assetForm');
             const formData = new FormData(form);
             const resultsSection = document.getElementById('resultsSection');
             const createButton = document.getElementById('createAssetButton');
 
+            // Clear previous results and hide error messages
+            document.querySelectorAll('.output-section pre, .output-section .image-gallery, .output-section img.final-image').forEach(el => {
+                if (el.tagName === 'PRE') el.textContent = 'Awaiting results...';
+                if (el.id === 'imageGalleryContainer') el.innerHTML = '<p id="noImagesGeneratedText">No images were generated or retrieved.</p>';
+                if (el.id === 'finalSelectedImagePreview') el.src = '/static/mock_image.png';
+            });
+            document.getElementById('imageGenerationOverallErrorSection').style.display = 'none';
+            document.getElementById('imageGenerationOverallErrorOutput').textContent = '';
+            document.getElementById('uploadedSampleImageLink').href = "#";
+            document.getElementById('uploadedSampleImageLink').textContent = "N/A";
+            document.getElementById('uploadedSampleImagePreview').style.display = 'none';
+            document.getElementById('uploadedSampleImagePreview').src = "";
+            document.getElementById('rawGithubImageLink').href = "#";
+            document.getElementById('rawGithubImageLink').textContent = "N/A";
+            document.getElementById('finalSelectedImageLink').href = "#";
+            document.getElementById('finalSelectedImageLink').textContent = "Awaiting selection...";
+
+
             startLoadingAnimation();
             createButton.disabled = true;
             createButton.style.opacity = "0.7";
-            resultsSection.style.display = 'none';
+            resultsSection.style.display = 'block'; // Show section to see "Awaiting results..."
 
-            // Basic client-side validation (can be expanded)
+            // Basic client-side validation
             let isValid = true;
             form.querySelectorAll('[required]').forEach(input => {
-                if (!input.value) {
+                if (!input.value.trim()) {
                     isValid = false;
                     input.style.borderColor = 'red';
                 } else {
@@ -194,9 +256,9 @@
 
             if (!isValid) {
                 stopLoadingAnimation();
-                alert('Please fill in all required fields.');
                 createButton.disabled = false;
                 createButton.style.opacity = "1";
+                alert('Please fill in all required fields.');
                 return;
             }
 
@@ -206,107 +268,156 @@
                     body: formData
                 });
 
-                if (!response.ok) {
-                    throw new Error(`HTTP error! status: ${response.status}`);
-                }
-
-                const results = await response.json();
-
-                document.getElementById('grokIpTrendsOutput').textContent = JSON.stringify(results.research_info_grok_ip, null, 2);
-                document.getElementById('grokEventTrendsOutput').textContent = JSON.stringify(results.research_info_grok_event, null, 2);
-                document.getElementById('gptArtStyleOutput').textContent = JSON.stringify(results.art_style_gpt, null, 2);
-                
-                // For Initial Concept output from GPT (Step 1 of brainstorm)
-                const gptInitialConceptOutput = document.getElementById('gptInitialConceptOutput');
-                if (results.initial_concept_gpt) {
-                    gptInitialConceptOutput.textContent = JSON.stringify(results.initial_concept_gpt, null, 2);
-                } else {
-                    gptInitialConceptOutput.textContent = 'N/A';
-                }
-
-                document.getElementById('gptBrainstormOutput').textContent = JSON.stringify(results.brainstorm_gpt, null, 2);
-                document.getElementById('gptFeedbackOutput').textContent = JSON.stringify(results.feedback_gpt, null, 2);
-                
-                // GPT - Final Result (Iterated Brainstorm)
-                const finalResultGPTOutput = document.getElementById('final-result-gpt-output');
-                if (results.final_result_gpt) {
-                    finalResultGPTOutput.textContent = JSON.stringify(results.final_result_gpt, null, 2);
-                } else {
-                    finalResultGPTOutput.textContent = 'No final result data received.';
-                }
-
-                // Generated Asset Image
-                const generatedAssetImage = document.getElementById('generated-asset-image');
-                const imageGenerationStatus = document.getElementById('image-generation-status');
-                
-                if (results.image_generation_error) {
-                    imageGenerationStatus.textContent = `Error: ${results.image_generation_error}`;
-                    generatedAssetImage.src = "/static/mock_image.png"; // Show mock if error
-                } else if (results.generated_image_url) {
-                    generatedAssetImage.src = results.generated_image_url;
-                    imageGenerationStatus.textContent = "Image generated successfully.";
-                } else {
-                    generatedAssetImage.src = "/static/mock_image.png"; // Fallback to mock
-                    imageGenerationStatus.textContent = "No image URL received, showing mock image.";
-                }
-
-                const uploadedSampleImageLink = document.getElementById('uploadedSampleImageLink');
-                const uploadedSampleImagePreview = document.getElementById('uploadedSampleImagePreview');
-                if (results.uploaded_sample_image_url) {
-                    uploadedSampleImageLink.textContent = results.uploaded_sample_image_url;
-                } else {
-                    uploadedSampleImageLink.textContent = 'N/A';
-                    uploadedSampleImagePreview.style.display = 'none';
-                }
-
-                const rawGithubLink = document.getElementById('rawGithubImageLink');
-                if (results.raw_github_image_link) {
-                    if (results.raw_github_image_link.startsWith("Error") || results.raw_github_image_link.startsWith("Git configuration error") || results.raw_github_image_link.startsWith("Unexpected Git error") || results.raw_github_image_link.startsWith("File type not allowed")) {
-                        rawGithubLink.textContent = results.raw_github_image_link;
-                        rawGithubLink.href = '#';
-                    } else {
-                        rawGithubLink.textContent = results.raw_github_image_link;
-                        rawGithubLink.href = results.raw_github_image_link;
-                    }
-                } else {
-                    rawGithubLink.textContent = 'N/A';
-                    rawGithubLink.href = '#';
-                }
-
-                resultsSection.style.display = 'block';
-            } catch (error) {
-                console.error('Error creating asset:', error);
-                alert('An error occurred while creating the asset. Check the console for details.');
-            } finally {
                 stopLoadingAnimation();
                 createButton.disabled = false;
                 createButton.style.opacity = "1";
+                resultsSection.style.display = 'block';
+
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    console.error('Server error:', errorText);
+                    document.getElementById('imageGenerationOverallErrorOutput').textContent = `Server Error: ${response.status} ${response.statusText}. ${errorText}`;
+                    document.getElementById('imageGenerationOverallErrorSection').style.display = 'block';
+                    return;
+                }
+
+                const results = await response.json();
+                console.log("Results received:", results);
+
+                // Display research info
+                displayJSON('grokIpTrendsOutput', results.research_info_grok_ip);
+                displayJSON('grokEventTrendsOutput', results.research_info_grok_event);
+                
+                // Display Art Style
+                displayJSON('gptArtStyleOutput', results.art_style_gpt);
+
+                // Display sample image links
+                if (results.uploaded_sample_image_url && results.uploaded_sample_image_url !== "/uploads/None") {
+                    const sampleLink = document.getElementById('uploadedSampleImageLink');
+                    const samplePreview = document.getElementById('uploadedSampleImagePreview');
+                    if (results.uploaded_sample_image_url.startsWith("http")) { //Direct URL
+                        sampleLink.href = results.uploaded_sample_image_url;
+                        sampleLink.textContent = results.uploaded_sample_image_url;
+                        samplePreview.src = results.uploaded_sample_image_url;
+                    } else { // Local upload
+                        sampleLink.href = results.uploaded_sample_image_url;
+                        sampleLink.textContent = results.uploaded_sample_image_url;
+                        samplePreview.src = results.uploaded_sample_image_url;
+                    }
+                     samplePreview.style.display = 'block';
+                } else {
+                     document.getElementById('uploadedSampleImageLink').textContent = "No image uploaded or URL provided.";
+                     document.getElementById('uploadedSampleImagePreview').style.display = 'none';
+                }
+
+                if (results.raw_github_image_link) {
+                    const githubLink = document.getElementById('rawGithubImageLink');
+                    githubLink.href = results.raw_github_image_link;
+                    githubLink.textContent = results.raw_github_image_link;
+                } else {
+                    document.getElementById('rawGithubImageLink').textContent = "N/A (not uploaded to Git or direct URL used).";
+                }
+
+
+                // Display concept stages
+                displayJSON('gptInitialConceptOutput', results.initial_concept_gpt);
+                displayJSON('gptConceptFeedbackOutput', results.concept_feedback_gpt);
+                displayJSON('gptRefinedConceptOutput', results.refined_concept_gpt);
+
+                // Display Image Generation Overall Error (if any, and no final image)
+                if (results.image_generation_overall_error && results.final_selected_image_url === "/static/mock_image.png") {
+                    document.getElementById('imageGenerationOverallErrorOutput').textContent = results.image_generation_overall_error;
+                    document.getElementById('imageGenerationOverallErrorSection').style.display = 'block';
+                } else if (results.final_selected_image_url !== "/static/mock_image.png") {
+                     document.getElementById('imageGenerationOverallErrorSection').style.display = 'none';
+                }
+
+
+                // Display all generated images in gallery
+                const galleryContainer = document.getElementById('imageGalleryContainer');
+                galleryContainer.innerHTML = ''; // Clear previous gallery items or "no images" text
+                const noImagesTextEl = document.getElementById('noImagesGeneratedText');
+                if (noImagesTextEl) noImagesTextEl.style.display = 'none';
+
+
+                if (results.all_generated_images_details && results.all_generated_images_details.length > 0) {
+                    results.all_generated_images_details.forEach(imgData => {
+                        const itemDiv = document.createElement('div');
+                        itemDiv.classList.add('image-gallery-item');
+                        
+                        const title = document.createElement('h5');
+                        title.textContent = `Attempt ${imgData.attempt} - Image ID: ${imgData.id.substring(0,8)}...`;
+                        itemDiv.appendChild(title);
+
+                        const img = document.createElement('img');
+                        img.src = imgData.url;
+                        img.alt = `Generated Image ${imgData.id}`;
+                        img.classList.add('generated-image');
+                        itemDiv.appendChild(img);
+
+                        if (imgData.evaluation) {
+                            const evalTitle = document.createElement('p');
+                            evalTitle.innerHTML = '<strong>Evaluation:</strong>';
+                            itemDiv.appendChild(evalTitle);
+
+                            const evalPre = document.createElement('pre');
+                            evalPre.textContent = JSON.stringify(imgData.evaluation, null, 2);
+                            if(imgData.evaluation.error) evalPre.classList.add('error-message');
+                            itemDiv.appendChild(evalPre);
+                        } else {
+                            const noEval = document.createElement('p');
+                            noEval.textContent = 'No evaluation data for this image.';
+                            itemDiv.appendChild(noEval);
+                        }
+                        galleryContainer.appendChild(itemDiv);
+                    });
+                } else {
+                    galleryContainer.innerHTML = '<p>No images were generated or retrieved from LeonardoAI attempts.</p>';
+                }
+                
+                // Display final selected image and its evaluation
+                if (results.final_selected_image_url && results.final_selected_image_url !== "/static/mock_image.png") {
+                    document.getElementById('finalSelectedImagePreview').src = results.final_selected_image_url;
+                    const finalLink = document.getElementById('finalSelectedImageLink');
+                    finalLink.href = results.final_selected_image_url;
+                    finalLink.textContent = results.final_selected_image_url;
+                } else {
+                    document.getElementById('finalSelectedImagePreview').src = "/static/mock_image.png"; // Keep mock if none
+                     const finalLink = document.getElementById('finalSelectedImageLink');
+                    finalLink.href = "#";
+                    finalLink.textContent = "No final image selected or generation failed.";
+                }
+                displayJSON('finalImageEvaluationOutput', results.final_image_evaluation);
+
+
+            } catch (error) {
+                console.error('Error fetching or processing results:', error);
+                stopLoadingAnimation();
+                createButton.disabled = false;
+                createButton.style.opacity = "1";
+                document.getElementById('imageGenerationOverallErrorOutput').textContent = 'Error processing request: ' + error.message;
+                document.getElementById('imageGenerationOverallErrorSection').style.display = 'block';
             }
         });
 
         document.getElementById('populateTestDataButton').addEventListener('click', function() {
-            document.getElementById('ip_name').value = 'Goblin Kitchen';
-            document.getElementById('ip_description').value = 'Resource management game about goblins running a restaurant';
-            document.getElementById('target_audience').value = 'Broad casual 16-18 years old';
-            
+            document.getElementById('ip_name').value = 'Goblin Grub Grab';
+            document.getElementById('ip_description').value = 'A whimsical, fast-paced restaurant management game where players run a chaotic goblin kitchen serving outlandish dishes to fantastical creatures.';
+            document.getElementById('target_audience').value = 'Players who enjoy simulation, cooking games, and humorous fantasy settings (e.g., Overcooked, Stardew Valley, Theme Hospital). Age 12+.';
             document.getElementById('asset_type').value = 'character_concept';
             document.getElementById('entity').value = 'friendly_npc';
-            document.getElementById('asset_description_input').value = 'Restaurant customer';
-            document.getElementById('event_name').value = 'Christmas';
-
-            // For the sample image, we can't set the file input directly.
-            // We'll clear it and show a note about the intended test image.
-            const sampleImageInput = document.getElementById('sample_image');
-            sampleImageInput.value = null; // Clears any selected file
-            document.getElementById('testImagePathNote').textContent = 'Test Image Path for this data: uploads/c3b50936b73f4bf28aded60592ce2872.jpg (Please select manually if needed)';
+            document.getElementById('asset_description_input').value = 'A jovial, overweight goblin customer known for his insatiable appetite and festive attire.';
+            document.getElementById('event_name').value = 'Winter Feast Holiday Event';
+            // Update to fill the new sample image URL input field
+            const sampleImageUrlInput = document.getElementById('sample_image_url_input');
+            const testImageUrl = 'https://raw.githubusercontent.com/MikitaF/theMid/main/uploads/449e1ad01374470281499ef3fdb1d637.jpg';
+            sampleImageUrlInput.value = testImageUrl;
             
-            // Optional: If you have a preview for the *currently selected* image, clear it or update it.
-            // Example: if you had an <img id="sampleImagePreview">, you might do:
-            // document.getElementById('sampleImagePreview').style.display = 'none'; 
-            // document.getElementById('sampleImagePreview').src = '';
-
-            alert('Form populated with test data! Please select the sample image manually if you intend to use it.');
+            const testImagePathNote = document.getElementById('testImagePathNote');
+            testImagePathNote.textContent = `Test image URL populated: ${testImageUrl}. You can also upload a file.`;
+            alert('Test data populated! The sample image URL has been filled. You can clear it or upload a file instead.');
         });
+
     </script>
 </body>
 </html> 
