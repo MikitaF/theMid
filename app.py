@@ -167,13 +167,13 @@ def create_asset_route():
 
         # --- Call GPT to describe Art Style (uses raw_image_link from either upload or direct input) ---
         if gpt_client and raw_image_link:
-            art_style_prompt_text = f"""thoroughly describe the style of the image at {raw_image_link} in detail. Focus on the art direction and style instead of the subject itself. Avoide unnecessary flavour adjectives. Output in following json format:
+            art_style_prompt_text = f"""Describe the style of the image at {raw_image_link} in detail. Focus on the art direction and style instead of the subject itself. Avoide unnecessary flavour adjectives. Output in following json format:
 {{
-    "style": {{"description": "", "scale":"realistic/cartoony/exaggerated", "shading": "flat/mostly flat/smooth 3d/detailed realistic/painterly", "design":"angular/curvy/realistic"}},
-    "linework":{{"outline": true/false, "thickness": "very thin/medium/bold", "style": "clean and consistent/rough and abrupt", "color": "darker shade of fill tone to preserve cohesion"}},
-    "color_palette": {{"type": "vivid rgb/neon/realistic/narrow palette/gritty/minimalist", "saturation": "saturated/grayscale/pastelle", "accents":"yes/no", "main colours":[]}},
-    "visual_density": {{"level": "low/mid/high/etremly detailed", "background": "solid color/minimalist/detailed"}},
-    "additional notes": "describe the style in a concise manner professional specification style"
+    "style": {{"design":"angular/curvy/realistic", "shading": "flat/mostly flat/smooth 3d/detailed realistic/painterly", "scale":"realistic/chibi/exaggerated"}},
+    "linework":{{"outline": true/false, "thickness": "very thin, thin/medium/bold", "color": "darker albedo/black"}},
+    "color_palette": {{"type": "vivid rgb/neon/realistic/narrow palette/gritty/minimalist", "saturation": "saturated/grayscale/pastelle"}},
+    "visual_density": {{"level of detail": "simple/simplified/normal/extremly detailed", "background": "solid color/environment"}},
+    "additional notes": "describe the style in a concise manner (50 characters)"
 }}
 """ # Ensure this prompt is exactly as you need it.
             print(f"\n--- Sending to GPT for Art Style Analysis (Source: {raw_image_link}) ---")
@@ -198,15 +198,13 @@ def create_asset_route():
 
         # --- XAI/Grok API Calls for Research (Same as before) ---
         if xai_client:
-            ip_trends_prompt_text = f"""you are the customer research specialist... Output in following jason format: {{"IP trends":{{"observations":"","notable Shows and Movies":[],"popular characters":[],"competitor games":[]}}}}""" # Shortened for brevity
-            # (Full prompt text as in original)
-            ip_trends_prompt_text = f"""you are the customer research specialist working on identifying popular trends aligning with the [{data.get('ip_description', '')}] direction and [{data.get('target_audience', '')}] interest. Make a concise list of latest key trends from entertainment media and social media trends. Output in following jason format:
+            
+            ip_trends_prompt_text = f"""you are the customer research specialist working on identifying popular trends aligning with the [{data.get('ip_description', '')}] direction and [{data.get('target_audience', '')}] interest. 
+            Make a concise list of latest key trends from entertainment media and social media trends interest in the context of [{data.get('event_name', '')}]. Output in following jason format:
             {{
                 "IP trends":{{
-                    observations:"",
-                    "notable Shows and Movies":[],
-                    "popular characters":[],
-                    "competitor games":[]
+                    "3 notable IPs":[],
+                    "3popular characters or items":[]
                 }}
             }} """
             print("\n--- Requesting IP Trends from XAI/Grok ---")
@@ -218,23 +216,23 @@ def create_asset_route():
                 print(f"Error XAI IP Trends: {e}")
                 ip_trends_data = {"error": f"Failed XAI IP Trends: {e}"}
 
-            event_trends_prompt_text = f"""you are the marketing research specialist working on identifying popular trends aligning with the [{data.get('ip_description', '')}], [{data.get('asset_description', '')}] direction based on [{data.get('target_audience', '')}] interest in the context of [{data.get('event_name', '')}]. Make a concise list of key trends from entertainment media and social media trends. Output in following jason format:
-            {{
-                "Event trends":{{
-                    observations:"",
-                    "notable Shows and Movies":[],
-                    "popular characters":[],
-                    "competitor games":[]
-                }}
-            }} """
-            print("\n--- Requesting Event Trends from XAI/Grok ---")
-            print(f"Event Trends Prompt:\n{event_trends_prompt_text}\n")
-            try:
-                event_trends_response = xai_client.chat.completions.create(model="grok-3", messages=[{"role": "user", "content": event_trends_prompt_text}], response_format={"type": "json_object"}, timeout=30.0)
-                event_trends_data = json.loads(event_trends_response.choices[0].message.content)
-            except Exception as e:
-                print(f"Error XAI Event Trends: {e}")
-                event_trends_data = {"error": f"Failed XAI Event Trends: {e}"}
+            # event_trends_prompt_text = f"""you are the marketing research specialist working on identifying popular trends aligning with the [{data.get('ip_description', '')}], [{data.get('asset_description', '')}] direction based on [{data.get('target_audience', '')}] interest in the context of [{data.get('event_name', '')}]. Make a concise list of key trends from entertainment media and social media trends. Output in following jason format:
+            # {{
+            #     "Event trends":{{
+            #         observations:"",
+            #         "notable Shows and Movies":[],
+            #         "popular characters":[],
+            #         "competitor games":[]
+            #     }}
+            # }} """
+            # print("\n--- Requesting Event Trends from XAI/Grok ---")
+            # print(f"Event Trends Prompt:\n{event_trends_prompt_text}\n")
+            # try:
+            #     event_trends_response = xai_client.chat.completions.create(model="grok-3", messages=[{"role": "user", "content": event_trends_prompt_text}], response_format={"type": "json_object"}, timeout=30.0)
+            #     event_trends_data = json.loads(event_trends_response.choices[0].message.content)
+            # except Exception as e:
+            #     print(f"Error XAI Event Trends: {e}")
+            #     event_trends_data = {"error": f"Failed XAI Event Trends: {e}"}
         else:
             ip_trends_data = {"error": "XAI client not initialized."}
             event_trends_data = {"error": "XAI client not initialized."}
@@ -245,15 +243,11 @@ def create_asset_route():
         # --- Step 1: GPT - Initial Concept & Visual Design (theMid 1.1) ---
         initial_concept_output = {}
         if gpt_client:
-            prompt_initial_concept_text = f"""Given the following asset details and research information, generate a unique concept name and a concise visual design description for a [{data.get('asset_description', '')}] [{data.get('entity', '')}] [{data.get('asset_type', '')}] within a [{data.get('ip_description', '')}] game.
-Asset Description: {data.get('asset_description', '')}
-Entity: {data.get('entity', '')}
-Asset Type: {data.get('asset_type', '')}
-IP Description: {data.get('ip_description', '')}
+            prompt_initial_concept_text = f"""Generate a concept name and a concise(50 characters) visual design description for a {data.get('asset_description', '')} {data.get('entity', '')} {data.get('asset_type', '')} for a {data.get('ip_description', '')} game.
 Research Information:
 {research_info_json_string}
 Focus the 'visual_design' on core distinguishing features or thematic elements based on 'asset_description'.
-Output ONLY a single JSON object: {{"concept_name": "<Name>", "visual_design": "<Description>"}}"""
+Output ONLY a single JSON object: {{"concept_name": "<e.g. vampire customer/orc worker/can of tuna/sport bicycle/etc.>", "visual_design": "<Description (50 characters)>"}}"""
             
             print("\n--- GPT: Initial Concept & Visual Design ---")
             print(f"Prompt:\n{prompt_initial_concept_text}\n")
@@ -268,9 +262,17 @@ Output ONLY a single JSON object: {{"concept_name": "<Name>", "visual_design": "
         # --- Step 2: GPT - Evaluate Initial Concept (theMid 1.1) ---
         concept_feedback_output = {}
         if gpt_client and "error" not in initial_concept_output:
+            # Get asset description and event name from data for clarity in the prompt
+            asset_desc_val = data.get('asset_description', 'the provided asset description')
+            event_name_val = data.get('event_name', 'the provided event name')
+
+            # Construct the specific instruction for the 'fit' field placeholder
+            # This tells GPT what to fill in, making it specific to the user's input.
+            fit_placeholder_text = f"<text assessing how well the concept (detailed above) fits the specific asset_description='{asset_desc_val}' and the specific event_name='{event_name_val}'>"
+
             prompt_feedback_text = f"""Evaluate the proposed concept:
 {json.dumps(initial_concept_output, indent=2)}
-Provide actionable feedback. Output ONLY a single JSON object: {{"evaluation": {{"strengths": [], "issues": [], "suggestions": []}}}}"""
+Provide actionable feedback for the asset described as '{asset_desc_val}'. Output ONLY a single JSON object: {{"evaluation": {{"fit": "{fit_placeholder_text}", "suggestions": []}}}}"""
             print("\n--- GPT: Evaluate Initial Concept ---")
             print(f"Prompt:\n{prompt_feedback_text}\n")
             try:
@@ -304,61 +306,48 @@ Provide actionable feedback. Output ONLY a single JSON object: {{"evaluation": {
 
         # --- New Step: GPT - Optimize Prompt for LeonardoAI (theMid 1.1) ---
         optimized_leonardo_prompt = ""
-        if gpt_client and "error" not in refined_concept_output and "error" not in art_style_info:
-            prompt_for_leo_optimization_text = f"""You are an expert prompt engineer for AI image generation services like LeonardoAI, which has a character limit of around 1500 characters for prompts.
-Given the following [Concept] and [Art Style] information, synthesize them into a single, concise, and highly effective image generation prompt.
-The prompt should be purely descriptive, focusing on keywords, visual details, and artistic direction.
-Avoid conversational language, JSON syntax, or any explanatory text.
-The generated prompt must be less than 1400 characters.
-
-[Concept]:
-{json.dumps(refined_concept_output, indent=2)}
-
-[Art Style]:
-{json.dumps(art_style_info, indent=2)}
-
-Output ONLY the refined image generation prompt string. Make it dense with descriptive keywords and artistic direction.
-Refined Prompt for LeonardoAI:
-"""
-            
-            print("\n--- GPT: Optimize Prompt for LeonardoAI ---")
-            print(f"Prompt for Optimization (summary):\nConcept Name: {refined_concept_output.get('concept_name', 'N/A')}, Art Style Keys: {list(art_style_info.keys()) if isinstance(art_style_info,dict) else 'N/A'}")
-            # print(f"Full Prompt for Optimization:\n{prompt_for_leo_optimization_text}\n") # Potentially very long
-
+        if gpt_client and "error" not in refined_concept_output and "error" not in art_style_info: # gpt_client check remains useful for later evaluation steps
+            print("\n--- Constructing LeonardoAI Prompt from Template ---")
             try:
-                optimization_response = gpt_client.chat.completions.create(
-                    model="gpt-4o",
-                    messages=[{"role": "user", "content": prompt_for_leo_optimization_text}],
-                    max_tokens=350,  # Max output tokens (approx 1400 chars / 4 chars_per_token)
-                    temperature=0.5 # Encourage more focused output
-                )
-                optimized_leonardo_prompt = optimization_response.choices[0].message.content.replace("Refined Prompt for LeonardoAI:", "").strip()
+                asset_type = data.get('asset_type', 'asset')
+                # Ensure refined_concept_output is a dict before accessing .get
+                concept_name_val = refined_concept_output.get('concept_name', 'unnamed concept') if isinstance(refined_concept_output, dict) else 'unnamed concept'
+                asset_description_val = data.get('asset_description', 'general description')
+
+                # Ensure art_style_info is a dict before accessing .get
+                art_style_dict = art_style_info if isinstance(art_style_info, dict) else {}
                 
-                if len(optimized_leonardo_prompt) > 1450: # A bit of buffer over 1400
-                    print(f"Warning: Optimized prompt is long ({len(optimized_leonardo_prompt)} chars). Truncating.")
-                    optimized_leonardo_prompt = optimized_leonardo_prompt[:1450]
+                style_details = art_style_dict.get('style', {})
+                shading_type = style_details.get('shading', 'standard shading')
 
-                if not optimized_leonardo_prompt:
-                    raise ValueError("GPT returned an empty optimized prompt.")
+                linework_details = art_style_dict.get('linework', {})
+                outline_type = linework_details.get('style', 'standard outline')
 
-                print(f"Optimized LeonardoAI Prompt (length {len(optimized_leonardo_prompt)}):\n{optimized_leonardo_prompt}")
+                visual_density_details = art_style_dict.get('visual_density', {})
+                background_type = visual_density_details.get('background', 'simple background')
+
+                optimized_leonardo_prompt = f"a {asset_type} of a {concept_name_val} {asset_description_val}, {shading_type} shading, {outline_type} outline, {background_type} background, fully visible subject"
+
+                if not optimized_leonardo_prompt.strip(): # Check if it's empty after stripping
+                    raise ValueError("Constructed Leonardo prompt is empty or only whitespace.")
+                
+                print(f"Constructed LeonardoAI Prompt (length {len(optimized_leonardo_prompt)}):\n{optimized_leonardo_prompt}")
 
             except Exception as e:
-                error_message = f"GPT Optimize Prompt for LeonardoAI failed: {e}"
+                error_message = f"Failed to construct LeonardoAI prompt from template: {e}"
                 print(error_message)
-                optimized_leonardo_prompt = "" # Fallback to empty or basic
-                # Store this error to be displayed in UI or to halt image gen
+                optimized_leonardo_prompt = "" 
                 image_generation_global_error = error_message 
         
         elif "error" in refined_concept_output:
             optimized_leonardo_prompt = ""
-            image_generation_global_error = f"Skipping LeonardoAI prompt optimization due to error in refined concept: {refined_concept_output.get('error')}"
+            image_generation_global_error = f"Skipping LeonardoAI prompt construction due to error in refined concept: {refined_concept_output.get('error')}"
         elif "error" in art_style_info:
             optimized_leonardo_prompt = ""
-            image_generation_global_error = f"Skipping LeonardoAI prompt optimization due to error in art style: {art_style_info.get('error')}"
+            image_generation_global_error = f"Skipping LeonardoAI prompt construction due to error in art style: {art_style_info.get('error')}"
         else:
             optimized_leonardo_prompt = ""
-            image_generation_global_error = "GPT client not initialized. Cannot optimize prompt for LeonardoAI."
+            image_generation_global_error = "Prerequisites (concept, style, or client) not met for LeonardoAI prompt construction."
         
         # --- Step 4 & 5: LeonardoAI Image Generation & GPT Evaluation Loop (theMid 1.1) ---
         all_generated_images_data = [] 
@@ -406,7 +395,19 @@ Refined Prompt for LeonardoAI:
                         "presetStyle": "DYNAMIC", 
                         "prompt": current_image_prompt_text,  
                         "width": 896,
-                        # "alchemy": False, # Explicitly false or remove if not supported by model
+                        "presetStyle": "DYNAMIC",
+                        "elements": [
+                            {
+                                "akUUID": "7c040ea3-cbed-455d-825a-2657eea36aae",
+                                "weight": 0.7
+                            }
+                        ],
+                        "userElements": [
+                            {
+                                "userLoraId": 61655,
+                                "weight": 0.3
+                            }
+                        ]
                     } 
                     print(f"LeonardoAI Submit Payload: {json.dumps(payload, indent=2)}")
                     response_submit = requests.post(LEONARDO_API_ENDPOINT_GENERATIONS, json=payload, headers=headers)
@@ -556,11 +557,11 @@ The images are provided sequentially after this text. Please associate your eval
     `{current_image_prompt_text}`
 
 **Evaluation Criteria per Image**:
--   **Fitness to Refined Concept**: How well does the image embody the `concept_name` and `visual_design` from the Refined Concept?
+-   **Fitness to Initial request**: How well does the image embody the `concept_name` and `visual_design` from the Refined Concept?
 -   **Adherence to Art Style Definition**: How well does the image match ALL aspects of the specified `Art Style Definition`?
 -   **Readability & Composition**: Is the subject clear? Is the composition effective?
--   **Artifacts & Distortions**: Are there any visual glitches, strange anatomy, or other generation artifacts?
--   **Quality Score**: Assign a quality score from 1 (poor) to 10 (excellent). Be honest and mega critical, use the full range.
+-   **Artifacts & Distortions**: Are there any visual glitches, strange anatomy(hands), or other generation artifacts?
+-   **Quality Score**: Assign a quality score from 1 (poor) to 10 (excellent). Be honest and mega critical, there is no good enough.
 
 **Output Format**:
 Output ONLY a single JSON object. The JSON should contain a key "image_evaluations", which is a list of objects. Each object in the list corresponds to one of the evaluated images and MUST include its original 'id'.
