@@ -367,7 +367,7 @@ Provide actionable feedback for the asset described as '{asset_desc_val}'. Outpu
             current_image_prompt_text = optimized_leonardo_prompt 
 
             MAX_ATTEMPTS = 3
-            QUALITY_THRESHOLD = 9 
+            QUALITY_THRESHOLD = 10 
             LEONARDO_MODEL_ID = "b2614463-296c-462a-9586-aafdb8f00e36"
             LEONARDO_API_ENDPOINT_GENERATIONS = "https://cloud.leonardo.ai/api/rest/v1/generations"
             LEONARDO_API_ENDPOINT_GET_GENERATION = "https://cloud.leonardo.ai/api/rest/v1/generations/{generationId}"
@@ -396,16 +396,16 @@ Provide actionable feedback for the asset described as '{asset_desc_val}'. Outpu
                         "prompt": current_image_prompt_text,  
                         "width": 896,
                         "presetStyle": "DYNAMIC",
-                        "elements": [
-                            {
-                                "akUUID": "7c040ea3-cbed-455d-825a-2657eea36aae",
-                                "weight": 0.7
-                            }
-                        ],
+                        ##"elements": [
+                        ##    {
+                        ##        "akUUID": "7c040ea3-cbed-455d-825a-2657eea36aae",
+                        ##        "weight": 0.7
+                        ##    }
+                        ##],
                         "userElements": [
                             {
-                                "userLoraId": 61655,
-                                "weight": 0.3
+                                "userLoraId": 59963,
+                                "weight": 1
                             }
                         ]
                     } 
@@ -535,9 +535,9 @@ Provide actionable feedback for the asset described as '{asset_desc_val}'. Outpu
                     print(f"\n--- Evaluating {len(generated_batch_urls_ids)} Images from LeonardoAI Attempt {attempt + 1} with GPT ---")
                     eval_input_for_gpt = [{"id": img_data["id"], "image_url": img_data["url"]} for img_data in generated_batch_urls_ids]
                     
-                    eval_prompt_text_part = f"""You are an art director. You will evaluate a batch of generated images.
+                    eval_prompt_text_part = f"""You are a very critical art director. You will evaluate a batch of generated images very judmentally like your life depends on it.
 For each image, provide a concise evaluation based on the following criteria.
-The images are provided sequentially after this text. Please associate your evaluations with the image IDs listed below.
+The images are provided sequentially after this text. Associate your evaluations with the image IDs listed below.
 
 **Reference Information for Evaluation:**
 
@@ -545,34 +545,32 @@ The images are provided sequentially after this text. Please associate your eval
     ```json
     {json.dumps(refined_concept_output, indent=2)}
     ```
-    Assess how well the image embodies the `concept_name` and `visual_design` described in this Refined Concept.
+    This contains the `concept_name` and `visual_design` the image should embody. The asset is for: '{data.get('asset_description', 'the asset')}' in the context of '{data.get('event_name', 'the event')}'.
 
 2.  **Art Style Definition**:
     ```json
     {json.dumps(art_style_info, indent=2)}
     ```
-    Assess how well the image adheres to ALL aspects of this Art Style Definition (e.g., style.description, style.scale, linework, color_palette, visual_density). Be specific.
+    Assess adherence to this, especially features like: outline type: '{outline_type}', background type: '{background_type}'.
 
 3.  **Prompt Used for Generation (for context only)**:
     `{current_image_prompt_text}`
 
-**Evaluation Criteria per Image**:
--   **Fitness to Initial request**: How well does the image embody the `concept_name` and `visual_design` from the Refined Concept?
--   **Adherence to Art Style Definition**: How well does the image match ALL aspects of the specified `Art Style Definition`?
--   **Readability & Composition**: Is the subject clear? Is the composition effective?
--   **Artifacts & Distortions**: Are there any visual glitches, strange anatomy(hands), or other generation artifacts?
--   **Quality Score**: Assign a quality score from 1 (poor) to 10 (excellent). Be honest and mega critical, there is no good enough.
-
-**Output Format**:
+**Evaluation Criteria & Output Format per Image**:
 Output ONLY a single JSON object. The JSON should contain a key "image_evaluations", which is a list of objects. Each object in the list corresponds to one of the evaluated images and MUST include its original 'id'.
 The structure for each image evaluation object is:
 `{{`
   `"id": "<image_id_from_input_list>",`
-  `"fitness_to_concept_evaluation": "<Detailed text assessing how well the image fits the Refined Concept.>",`
-  `"adherence_to_art_style_evaluation": "<Detailed text assessing how well the image adheres to ALL aspects of the Art Style Definition.>",`
-  `"readability_and_artifacts_evaluation": "<Detailed text on image clarity, composition, and any visual artifacts or distortions.>",`
-  `"quality_score": <Integer score from 1 (poor) to 10 (excellent).>,`
-  `"overall_feedback": "<Concise summary and actionable suggestions for improving the image or the prompt if generation were to be re-attempted.>"`
+  `"concept_fitness_score": <Integer score 0-10, assessing if it looks like the asset '{data.get('asset_description', 'the asset')}' for event '{data.get('event_name', 'the event')}' based on Refined Concept>,`
+  `"concept_fitness_text": "<Brief justification for the concept_fitness_score>",`
+  `"composition_score": <Integer score 0-10, assessing if subject is fully fit into canvas: 0=heavily cropped, 10=fully visible>,`
+  `"composition_text": "<Brief justification for the composition_score>",`
+  `"quality_score": <Integer score 1-10 for overall quality, considering clarity, artifacts, distortions>,`
+  `"quality_text": "<Detailed text on image clarity, artifacts, distortions (e.g. hands), and overall impressions related to quality.>",`
+  `"style_fit_score": <Integer score 1-10, assessing adherence to Art Style Definition, especially '{outline_type}' outline and '{background_type}' background>,`
+  `"style_fit_text": "<Brief justification for style_fit_score, noting adherence to outline, background and other style aspects.>",`
+  `"average_score": <Integer score 1-10: calculated average of concept_fitness_score, composition_score, quality_score, and style_fit_score. Round to nearest integer.>,`
+  `"actionable_feedback": "<Concise summary and actionable suggestions for improving the image or the prompt if generation were to be re-attempted.>"`
 `}}`
 
 **List of Image IDs for reference (match with provided images):**
@@ -602,7 +600,7 @@ The structure for each image evaluation object is:
                         for img_data in generated_batch_urls_ids:
                             evaluation = next((e for e in eval_data_list if e.get("id") == img_data["id"]), None)
                             if not evaluation: # Mock eval if GPT fails for an image
-                                 evaluation = {"id": img_data["id"], "quality_score": 3, "overall_feedback":"Mocked: GPT eval missing."}
+                                 evaluation = {"id": img_data["id"], "average_score": 3, "actionable_feedback":"Mocked: GPT eval missing.", "concept_fitness_score": 3, "composition_score": 3, "quality_score": 3, "style_fit_score": 3} # Updated mock
                             img_data["evaluation"] = evaluation
                             temp_evaluated_batch.append(img_data)
                         
@@ -611,22 +609,23 @@ The structure for each image evaluation object is:
                         # Check if any image in this batch meets threshold
                         best_score_this_attempt = -1
                         for img_d in temp_evaluated_batch:
-                            score = img_d.get("evaluation", {}).get("quality_score", 0)
+                            score = img_d.get("evaluation", {}).get("average_score", 0) # Use average_score
                             if score > best_score_this_attempt: best_score_this_attempt = score
                         
                         if best_score_this_attempt >= QUALITY_THRESHOLD:
-                            print(f"Quality threshold met in attempt {attempt+1}. Best score: {best_score_this_attempt}")
+                            print(f"Quality threshold met in attempt {attempt+1}. Best average score: {best_score_this_attempt}")
                             break # Exit loop, will select best overall later
 
                         if attempt < MAX_ATTEMPTS - 1: # If not last attempt and threshold not met
                             print("Quality threshold not met. Asking GPT to refine prompt.")
                             # Refine prompt with GPT
-                            feedback_summary_for_refine = [{"id":img["id"], "score":img.get("evaluation",{}).get("quality_score"), "feedback":img.get("evaluation",{}).get("overall_feedback")} for img in temp_evaluated_batch]
+                            feedback_summary_for_refine = [{"id":img["id"], "score":img.get("evaluation",{}).get("average_score"), "feedback":img.get("evaluation",{}).get("actionable_feedback")} for img in temp_evaluated_batch] # Use average_score and actionable_feedback
                             refine_img_prompt_text = f"""Previous image generation attempt had issues.
 Previous Prompt: {current_image_prompt_text}
 Feedback on generated images: {json.dumps(feedback_summary_for_refine, indent=2)}
 
 Refine the prompt to improve image quality, adherence to concept, and reduce artifacts, while keeping it concise and under 1400 characters.
+Consider all feedback aspects like concept fitness, composition, quality, and style fit.
 Output ONLY the new, refined image generation prompt text.
 Refined Prompt for LeonardoAI:
 """
@@ -655,7 +654,7 @@ Refined Prompt for LeonardoAI:
                 best_overall_score = -1
                 current_best_image_info = None
                 for img_info in all_generated_images_data:
-                    score = img_info.get("evaluation", {}).get("quality_score", 0)
+                    score = img_info.get("evaluation", {}).get("average_score", 0) # Use average_score
                     if score > best_overall_score:
                         best_overall_score = score
                         current_best_image_info = img_info
@@ -664,10 +663,10 @@ Refined Prompt for LeonardoAI:
                     final_selected_image_url = current_best_image_info["url"]
                     final_image_evaluation = current_best_image_info["evaluation"]
                     final_selected_image_details_for_stylization = current_best_image_info # CAPTURE THIS
-                    print(f"Final selected image: {final_selected_image_url} with score {best_overall_score}. ID: {current_best_image_info.get('id')}")
+                    print(f"Final selected image: {final_selected_image_url} with average score {best_overall_score}. ID: {current_best_image_info.get('id')}")
                 elif all_generated_images_data: # If all evals failed or scores were 0
                     final_selected_image_url = all_generated_images_data[-1]["url"] # Pick last one from last batch
-                    final_image_evaluation = all_generated_images_data[-1].get("evaluation", {"error": "No valid evaluation found for any image"})
+                    final_image_evaluation = all_generated_images_data[-1].get("evaluation", {"error": "No valid evaluation found for any image", "average_score": 0}) # Updated mock
                     final_selected_image_details_for_stylization = all_generated_images_data[-1] # CAPTURE THIS
                     print(f"No image met criteria or had positive score. Selected last generated: {final_selected_image_url}")
 
